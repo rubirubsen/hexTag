@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>hexTag - Cyber Hex Grid</title>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <link rel="stylesheet" href="./src/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Map Container -->
+  <div id="map"></div>
+
+  <!-- Radar Scan Overlay -->
+  <div class="radar-scan"></div>
+
+  <!-- Top HUD: Game Stats -->
+  <header class="hud-header">
+    <div class="hud-card player-badge">
+      <div class="color-dot" id="userColorDot" title="Klicke für Farbwechsel"></div>
+      <div class="player-info">
+        <span class="player-tag" id="playerName">TAGGER_01</span>
+        <span class="player-status" id="gpsStatus">GPS: SUCHT SIGNAL...</span>
+      </div>
+    </div>
+
+    <div class="hud-card score-badge">
+      <div class="stat-label">TOTAL XP</div>
+      <div class="stat-value" id="totalXpDisplay">0</div>
+    </div>
+  </header>
+
+  <!-- Hex Capture Progress Card (Active when in Hex) -->
+  <div class="capture-overlay" id="captureCard">
+    <div class="capture-header">
+      <div class="hex-badge">
+        <span class="hex-icon">⬡</span>
+        <span id="currentHexLabel">HEX: SCANNING...</span>
+      </div>
+      <div class="capture-timer" id="timerDisplay">03:00</div>
+    </div>
+
+    <!-- Hexagon Progress Bar -->
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFillBar"></div>
+      <div class="progress-glow"></div>
+    </div>
+
+    <div class="capture-footer">
+      <span id="captureStatusText">Bleibe 3:00 Min in der Wabe</span>
+      <span class="xp-rate" id="incomeRateText">+10 XP / Min</span>
+    </div>
+  </div>
+
+  <!-- Bottom Floating Action Bar -->
+  <nav class="hud-bottom-bar">
+    <button class="hud-btn" id="btnCenterMap" title="Zentrieren auf GPS">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>
+      <span>LOKALISIEREN</span>
+    </button>
+
+    <div class="color-picker-group">
+      <button class="color-btn active" style="--c: #ff0055;" data-color="#ff0055" title="Neon Pink"></button>
+      <button class="color-btn" style="--c: #00f0ff;" data-color="#00f0ff" title="Cyber Cyan"></button>
+      <button class="color-btn" style="--c: #39ff14;" data-color="#39ff14" title="Acid Green"></button>
+      <button class="color-btn" style="--c: #ffe600;" data-color="#ffe600" title="Volt Yellow"></button>
+      <button class="color-btn" style="--c: #b026ff;" data-color="#b026ff" title="Purple Ray"></button>
+    </div>
+
+    <button class="hud-btn test-btn" id="btnSimulateMove" title="Klicke auf die Karte zum Bewegen">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+      <span>TEST-MOVE</span>
+    </button>
+  </nav>
+
+  <!-- Notification Toast -->
+  <div class="toast-banner" id="toast">WABE ERFOLGREICH EROBERT!</div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

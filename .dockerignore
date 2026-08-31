@@ -1,0 +1,10 @@
+node_modules
+dist
+.git
+.gitignore
+Assets
+Library
+Temp
+Logs
+UserSettings
+*.log
