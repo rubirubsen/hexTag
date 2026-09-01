@@ -6,6 +6,7 @@ import { ARViewer } from './arViewer.js';
 import { DroneManager } from './droneManager.js';
 import { DataBitsManager } from './dataBitsManager.js';
 import { PoiManager } from './poiManager.js';
+import { HQManager } from './hqManager.js';
 import { soundEngine } from './soundEngine.js';
 
 // --- GAME CONFIGURATION ---
@@ -507,14 +508,15 @@ const playerMarker = new maplibregl.Marker({ element: markerEl })
   .setLngLat([userLocation.lng, userLocation.lat])
   .addTo(map);
 
-// --- 4. DRONE, DATA BITS & POI MANAGERS ---
+// --- 4. DRONE, DATA BITS, POI & HQ MANAGERS ---
 let droneManager = null;
 let dataBitsManager = null;
 let poiManager = null;
+let hqManager = null;
 let activeSelectedPoi = null;
 
 map.on('load', () => {
-  console.log('[hexTag] Initialisiere Map, SSO, DataBits & OSM POIs...');
+  console.log('[hexTag] Initialisiere Map, SSO, DataBits, HQ & OSM POIs...');
 
   droneManager = new DroneManager(map, handleDroneManagerUpdate);
 
@@ -527,6 +529,7 @@ map.on('load', () => {
       spawnFloatingReward(`+${data.gained} 💎`, '#00f0ff');
       showToast(`✨ +${data.gained} ENERGY BITS GESAMMELT!`);
     }
+    if (hqManager) hqManager.syncCapacityToBitsManager();
   });
   if (dataBitsDisplay && dataBitsManager) {
     dataBitsDisplay.textContent = `💎 ${dataBitsManager.totalBits}`;
@@ -534,6 +537,11 @@ map.on('load', () => {
 
   poiManager = new PoiManager(map, (poi, fort) => {
     openNodeControlModal(poi, fort);
+  });
+
+  hqManager = new HQManager(map, dataBitsManager, poiManager, () => {
+    renderHqModal();
+    updateNetworkLinksVisual();
   });
 
   map.addSource('hex-grid', {
@@ -562,10 +570,13 @@ map.on('load', () => {
     }
   });
 
-  // Initialize Data Bits layers on top of hex grid
+  // Initialize Data Bits & Network layers on top of hex grid
   if (dataBitsManager) {
     dataBitsManager.initSourceAndLayers();
     dataBitsManager.spawnNearbyBits(userLocation.lat, userLocation.lng);
+  }
+  if (hqManager) {
+    hqManager.initNetworkLayers();
   }
   if (poiManager) {
     poiManager.fetchNearbyPOIs(userLocation.lat, userLocation.lng);
@@ -574,6 +585,7 @@ map.on('load', () => {
   checkAuthStatus();
   fetchServerZones();
   updateHexGrid(userLocation.lat, userLocation.lng);
+  updateNetworkLinksVisual();
   startGeolocation();
   syncColorButtons();
 
@@ -1487,3 +1499,190 @@ if (btnRestoreHud) {
     showToast('👁️ HUD wieder eingeblendet');
   });
 }
+
+// --- 15. HQ BASE MANAGEMENT & CYBER NETWORK LINKS ---
+export function updateNetworkLinksVisual() {
+  if (!hqManager || !poiManager) return;
+  const currentName = currentUser?.username || localStorage.getItem(SAVED_GUEST_NAME_KEY) || 'TAGGER_01';
+  const ownedPois = [];
+  Object.keys(poiManager.fortifiedNodes).forEach(id => {
+    const fort = poiManager.fortifiedNodes[id];
+    if (fort.isOwned && fort.poiData) {
+      const isMine = (currentUser && fort.owner_id === currentUser.id) ||
+                     (fort.owner && fort.owner.toLowerCase() === currentName.toLowerCase());
+      if (isMine) {
+        ownedPois.push(fort.poiData);
+      }
+    }
+  });
+  hqManager.updateNetworkLinks(ownedPois, userColor);
+}
+
+const hqModal = document.getElementById('hqModal');
+const btnCloseHqModal = document.getElementById('btnCloseHqModal');
+const dataBitsCard = document.getElementById('dataBitsCard');
+
+if (dataBitsCard) {
+  dataBitsCard.style.cursor = 'pointer';
+  dataBitsCard.addEventListener('click', () => {
+    soundEngine.playClick();
+    openHqModal();
+  });
+}
+
+if (btnCloseHqModal) {
+  btnCloseHqModal.addEventListener('click', () => {
+    soundEngine.playClick();
+    if (hqModal) hqModal.classList.remove('active');
+  });
+}
+
+function openHqModal() {
+  renderHqModal();
+  if (hqModal) hqModal.classList.add('active');
+}
+
+function renderHqModal() {
+  if (!hqManager) return;
+  const hqData = hqManager.data;
+  const totalBits = dataBitsManager ? dataBitsManager.totalBits : 0;
+  const maxStorage = hqManager.getMaxStorage();
+
+  const hqStorageText = document.getElementById('hqStorageText');
+  const hqStorageFill = document.getElementById('hqStorageFill');
+  if (hqStorageText) hqStorageText.textContent = `${totalBits} / ${maxStorage} 💎`;
+  if (hqStorageFill) hqStorageFill.style.width = `${Math.min(100, (totalBits / maxStorage) * 100)}%`;
+
+  // 1. Data-Silo
+  const siloCosts = [150, 350, 700, 1500, null];
+  const nextSiloCost = siloCosts[(hqData.siloLevel || 1) - 1];
+  const hqSiloTitle = document.getElementById('hqSiloTitle');
+  const hqSiloDesc = document.getElementById('hqSiloDesc');
+  const btnHqSiloCost = document.getElementById('btnHqSiloCost');
+  if (hqSiloTitle) hqSiloTitle.textContent = `Data-Silo (Level ${hqData.siloLevel || 1})`;
+  if (hqSiloDesc) hqSiloDesc.textContent = `Max. Kapazität: ${maxStorage} 💎 Bits`;
+  if (btnHqSiloCost) {
+    btnHqSiloCost.textContent = nextSiloCost ? `${nextSiloCost} 💎` : 'MAX';
+    btnHqSiloCost.disabled = !nextSiloCost;
+  }
+
+  // 2. Drone Hangar
+  const hangarCosts = [200, 450, 900, null];
+  const nextHangarCost = hangarCosts[(hqData.hangarLevel || 1) - 1];
+  const hqHangarTitle = document.getElementById('hqHangarTitle');
+  const hqHangarDesc = document.getElementById('hqHangarDesc');
+  const btnHqHangarCost = document.getElementById('btnHqHangarCost');
+  if (hqHangarTitle) hqHangarTitle.textContent = `Drohnen-Hangar (Level ${hqData.hangarLevel || 1})`;
+  if (hqHangarDesc) hqHangarDesc.textContent = `Flotte: ${hqData.hangarLevel || 1} Drohnen gleichzeitig`;
+  if (btnHqHangarCost) {
+    btnHqHangarCost.textContent = nextHangarCost ? `${nextHangarCost} 💎` : 'MAX';
+    btnHqHangarCost.disabled = !nextHangarCost;
+  }
+
+  // 3. Relay Tower
+  const relayCosts = [180, 400, 800, null];
+  const nextRelayCost = relayCosts[(hqData.relayLevel || 1) - 1];
+  const hqRelayTitle = document.getElementById('hqRelayTitle');
+  const hqRelayDesc = document.getElementById('hqRelayDesc');
+  const btnHqRelayCost = document.getElementById('btnHqRelayCost');
+  if (hqRelayTitle) hqRelayTitle.textContent = `Relais-Antenne (Level ${hqData.relayLevel || 1})`;
+  if (hqRelayDesc) hqRelayDesc.textContent = `Basis-Funkradius: ${hqManager.getSignalRangeMeters()}m`;
+  if (btnHqRelayCost) {
+    btnHqRelayCost.textContent = nextRelayCost ? `${nextRelayCost} 💎` : 'MAX';
+    btnHqRelayCost.disabled = !nextRelayCost;
+  }
+
+  // 4. Solar Synthesizer
+  const synthCosts = [120, 280, 600, null];
+  const nextSynthCost = synthCosts[hqData.synthLevel || 0];
+  const hqSynthTitle = document.getElementById('hqSynthTitle');
+  const hqSynthDesc = document.getElementById('hqSynthDesc');
+  const btnHqSynthCost = document.getElementById('btnHqSynthCost');
+  const synthYields = [0, 5, 15, 30];
+  if (hqSynthTitle) hqSynthTitle.textContent = `Solar-Synthesizer (Level ${hqData.synthLevel || 0})`;
+  if (hqSynthDesc) hqSynthDesc.textContent = `Passiv: +${synthYields[hqData.synthLevel || 0]} Bits / 5 Min`;
+  if (btnHqSynthCost) {
+    btnHqSynthCost.textContent = nextSynthCost ? `${nextSynthCost} 💎` : 'MAX';
+    btnHqSynthCost.disabled = !nextSynthCost;
+  }
+}
+
+// Module Upgrade Actions
+document.getElementById('btnUpgradeHqSilo')?.addEventListener('click', () => {
+  if (!hqManager) return;
+  const siloCosts = [150, 350, 700, 1500];
+  const cost = siloCosts[(hqManager.data.siloLevel || 1) - 1];
+  if (!cost) return;
+  if (hqManager.upgradeModule('silo', cost)) {
+    soundEngine.playUpgrade();
+    addXP(40, '🏗️ DATA-SILO ERWEITERT!');
+    showToast(`🏗️ Data-Silo auf Level ${hqManager.data.siloLevel} ausgebaut! (${hqManager.getMaxStorage()} 💎 Kapazität)`);
+    renderHqModal();
+  } else {
+    showToast(`⚠️ Nicht genug Energy Bits! (Benötigt ${cost} 💎)`);
+  }
+});
+
+document.getElementById('btnUpgradeHqHangar')?.addEventListener('click', () => {
+  if (!hqManager) return;
+  const hangarCosts = [200, 450, 900];
+  const cost = hangarCosts[(hqManager.data.hangarLevel || 1) - 1];
+  if (!cost) return;
+  if (hqManager.upgradeModule('hangar', cost)) {
+    soundEngine.playUpgrade();
+    addXP(50, '🛸 DROHNEN-HANGAR ERWEITERT!');
+    showToast(`🛸 Hangar Level ${hqManager.data.hangarLevel} online! (${hqManager.data.hangarLevel} Drohnen gleichzeitig)`);
+    renderHqModal();
+  } else {
+    showToast(`⚠️ Nicht genug Energy Bits! (Benötigt ${cost} 💎)`);
+  }
+});
+
+document.getElementById('btnUpgradeHqRelay')?.addEventListener('click', () => {
+  if (!hqManager) return;
+  const relayCosts = [180, 400, 800];
+  const cost = relayCosts[(hqManager.data.relayLevel || 1) - 1];
+  if (!cost) return;
+  if (hqManager.upgradeModule('relay', cost)) {
+    soundEngine.playUpgrade();
+    addXP(45, '📡 RELAIS-ANTENNE VERSTÄRKT!');
+    showToast(`📡 Relais Level ${hqManager.data.relayLevel} aktiv! (${hqManager.getSignalRangeMeters()}m Funkreichweite)`);
+    renderHqModal();
+  } else {
+    showToast(`⚠️ Nicht genug Energy Bits! (Benötigt ${cost} 💎)`);
+  }
+});
+
+document.getElementById('btnUpgradeHqSynth')?.addEventListener('click', () => {
+  if (!hqManager) return;
+  const synthCosts = [120, 280, 600];
+  const cost = synthCosts[hqManager.data.synthLevel || 0];
+  if (!cost) return;
+  if (hqManager.upgradeModule('synth', cost)) {
+    soundEngine.playUpgrade();
+    addXP(60, '⚡ BIT-SYNTHESIZER ONLINE!');
+    showToast(`⚡ Synthesizer Level ${hqManager.data.synthLevel} aktiv!`);
+    renderHqModal();
+  } else {
+    showToast(`⚠️ Nicht genug Energy Bits! (Benötigt ${cost} 💎)`);
+  }
+});
+
+document.getElementById('btnRelocateHq')?.addEventListener('click', () => {
+  if (!hqManager || !droneManager) return;
+  hqManager.data.lat = userLocation.lat;
+  hqManager.data.lng = userLocation.lng;
+  hqManager.saveData();
+
+  droneManager.saveHQ({
+    lat: userLocation.lat,
+    lng: userLocation.lng,
+    name: currentUser?.username ? `${currentUser.username.toUpperCase()}-STÜTZPUNKT` : 'CYBER-STÜTZPUNKT',
+    color: userColor
+  });
+
+  soundEngine.playUpgrade();
+  updateNetworkLinksVisual();
+  showToast('📍 HQ erfolgreich an deine aktuelle Position verlegt!');
+  renderHqModal();
+});

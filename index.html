@@ -349,6 +349,80 @@
     </div>
   </div>
 
+  <!-- HQ BASE MANAGEMENT & BUILDING SIMULATION MODAL -->
+  <div class="modal-backdrop" id="hqModal">
+    <div class="spray-panel hq-panel" style="max-width: 440px; width: 94%;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span id="hqModalTitle">🏢 CYBER-STÜTZPUNKT (HQ)</span>
+          <small id="hqModalSubtitle">BASIS-BAU & DATA-SILOS</small>
+        </div>
+        <button class="close-modal-btn" id="btnCloseHqModal">✕</button>
+      </div>
+
+      <div class="node-modal-content" style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+        <!-- SILO CAPACITY PROGRESS BAR -->
+        <div class="hq-storage-card" style="background: rgba(0, 240, 255, 0.08); border: 1px solid rgba(0, 240, 255, 0.3); border-radius: 12px; padding: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-family: var(--font-display); font-size: 11px; font-weight: 800;">
+            <span style="color: #00f0ff;">💎 DATA-SILO KAPAZITÄT</span>
+            <strong id="hqStorageText" style="color: #ffffff;">50 / 250 💎</strong>
+          </div>
+          <div style="background: rgba(0,0,0,0.5); border-radius: 8px; height: 8px; overflow: hidden; position: relative;">
+            <div id="hqStorageFill" style="background: linear-gradient(90deg, #00f0ff, #39ff14); height: 100%; width: 20%; transition: width 0.3s ease;"></div>
+          </div>
+        </div>
+
+        <!-- HQ MODULES UPGRADE GRID -->
+        <div class="node-upgrades-section">
+          <!-- 1. DATA SILO -->
+          <div class="upgrade-card" id="btnUpgradeHqSilo">
+            <div class="upgrade-icon">🏗️</div>
+            <div class="upgrade-info">
+              <strong id="hqSiloTitle">Data-Silo (Level 1)</strong>
+              <small id="hqSiloDesc">Max. Kapazität: 250 💎 Bits</small>
+            </div>
+            <button class="upgrade-action-btn" id="btnHqSiloCost">150 💎</button>
+          </div>
+
+          <!-- 2. DRONE HANGAR -->
+          <div class="upgrade-card" id="btnUpgradeHqHangar">
+            <div class="upgrade-icon">🛸</div>
+            <div class="upgrade-info">
+              <strong id="hqHangarTitle">Drohnen-Hangar (Level 1)</strong>
+              <small id="hqHangarDesc">Flotte: 1 Drohne gleichzeitig</small>
+            </div>
+            <button class="upgrade-action-btn" id="btnHqHangarCost">200 💎</button>
+          </div>
+
+          <!-- 3. RELAY TOWER -->
+          <div class="upgrade-card" id="btnUpgradeHqRelay">
+            <div class="upgrade-icon">📡</div>
+            <div class="upgrade-info">
+              <strong id="hqRelayTitle">Relais-Antenne (Level 1)</strong>
+              <small id="hqRelayDesc">Basis-Funkradius: 800m</small>
+            </div>
+            <button class="upgrade-action-btn" id="btnHqRelayCost">180 💎</button>
+          </div>
+
+          <!-- 4. BIT SYNTHESIZER -->
+          <div class="upgrade-card" id="btnUpgradeHqSynth">
+            <div class="upgrade-icon">⚡</div>
+            <div class="upgrade-info">
+              <strong id="hqSynthTitle">Solar-Synthesizer (Level 0)</strong>
+              <small id="hqSynthDesc">Passiv: 0 Bits / 5 Min</small>
+            </div>
+            <button class="upgrade-action-btn" id="btnHqSynthCost">120 💎</button>
+          </div>
+        </div>
+
+        <!-- RELOCATE HQ BUTTON -->
+        <button class="action-btn" id="btnRelocateHq" style="border-color: #ffe600; color: #ffe600; font-size: 11px; padding: 10px; font-weight: 800;">
+          📍 HQ AN AKTUELLE POSITION VERLEGEN
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- SPRAY PAINT MODAL -->
   <div class="modal-backdrop" id="sprayModal">
     <div class="spray-panel">
