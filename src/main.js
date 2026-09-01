@@ -515,22 +515,45 @@ document.getElementById('btnCenterMap').addEventListener('click', () => {
   }
 });
 
-document.getElementById('btnSimulateMove').addEventListener('click', () => {
-  isSimulating = true;
-  const dLat = (Math.random() - 0.5) * 0.0008;
-  const dLng = (Math.random() - 0.5) * 0.0008;
-  userLocation.lat += dLat;
-  userLocation.lng += dLng;
+// Dev-Mode Check fuer den "MOVE"-Button
+const urlParams = new URLSearchParams(window.location.search);
+const isDevMode = urlParams.get('dev') === 'true' || urlParams.get('test') === '1';
+const btnSimulateMove = document.getElementById('btnSimulateMove');
 
-  playerMarker.setLngLat([userLocation.lng, userLocation.lat]);
-  map.easeTo({ center: [userLocation.lng, userLocation.lat] });
-  handlePositionChange(userLocation.lat, userLocation.lng);
-});
+if (btnSimulateMove) {
+  if (!isDevMode) {
+    btnSimulateMove.style.display = 'none';
+  } else {
+    btnSimulateMove.addEventListener('click', () => {
+      isSimulating = true;
+      const dLat = (Math.random() - 0.5) * 0.0008;
+      const dLng = (Math.random() - 0.5) * 0.0008;
+      userLocation.lat += dLat;
+      userLocation.lng += dLng;
 
+      playerMarker.setLngLat([userLocation.lng, userLocation.lat]);
+      map.easeTo({ center: [userLocation.lng, userLocation.lat] });
+      handlePositionChange(userLocation.lat, userLocation.lng);
+    });
+  }
+}
+
+// Klick auf eine Wabe auf der Karte -> Waben-Details & Tags inspizieren
 map.on('click', (e) => {
-  isSimulating = true;
-  userLocation.lat = e.lngLat.lat;
-  userLocation.lng = e.lngLat.lng;
-  playerMarker.setLngLat([userLocation.lng, userLocation.lat]);
-  handlePositionChange(userLocation.lat, userLocation.lng);
+  const clickedHex = h3.latLngToCell(e.lngLat.lat, e.lngLat.lng, H3_RESOLUTION);
+  const captured = capturedHexes.get(clickedHex);
+  const tagCount = tagStore.getTagCountForHex(clickedHex);
+
+  if (clickedHex === currentHexId) {
+    showToast(`📍 Deine aktuelle Wabe (${clickedHex.slice(-6).toUpperCase()})`);
+  } else if (captured) {
+    showToast(`🛡️ Wabe ${clickedHex.slice(-6).toUpperCase()} gehört ${captured.owner} | ${tagCount} Tags`);
+  } else {
+    showToast(`⬡ Freie Wabe ${clickedHex.slice(-6).toUpperCase()} | ${tagCount} Tags`);
+  }
+
+  // Wenn Wabe Tags hat, Galerie auf Wunsch oeffnen
+  if (tagCount > 0) {
+    openGalleryForHex(clickedHex);
+  }
 });
