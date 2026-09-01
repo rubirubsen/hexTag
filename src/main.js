@@ -219,16 +219,31 @@ function formatTimeAgo(timestamp) {
   return new Date(timestamp).toLocaleDateString([], { day: '2-digit', month: '2-digit' });
 }
 
+export function isZoneOwnedByMe(zone) {
+  if (!zone) return false;
+  if (currentUser) {
+    if (zone.owner_id && (zone.owner_id === currentUser.id || zone.owner_id === `local_${currentUser.username.toLowerCase()}`)) {
+      return true;
+    }
+    if (zone.owner && zone.owner.toLowerCase() === currentUser.username.toLowerCase()) {
+      return true;
+    }
+    return false;
+  }
+  const savedGuest = localStorage.getItem(SAVED_GUEST_NAME_KEY);
+  if (savedGuest && zone.owner && zone.owner.toLowerCase() === savedGuest.toLowerCase()) {
+    return true;
+  }
+  return false;
+}
+
 function renderProfileTerritory() {
   if (!profileHexList) return;
 
-  const currentName = currentUser?.username || localStorage.getItem(SAVED_GUEST_NAME_KEY) || 'TAGGER_01';
   const myHexes = [];
 
   for (const [hexId, zone] of capturedHexes.entries()) {
-    const isOwner = (zone.owner && zone.owner.toLowerCase() === currentName.toLowerCase()) ||
-                    (currentUser && zone.owner_id === currentUser.id);
-    if (isOwner) {
+    if (isZoneOwnedByMe(zone)) {
       myHexes.push({
         hexId,
         color: zone.color || userColor,
@@ -359,6 +374,7 @@ function setLoggedOut() {
   loggedOutView.style.display = 'block';
   loggedInView.style.display = 'none';
   if (ssoLinkSection) ssoLinkSection.style.display = 'none';
+  renderProfileTerritory();
 }
 
 btnOpenAuthModal.addEventListener('click', () => {
@@ -431,7 +447,12 @@ btnLogout.addEventListener('click', async () => {
   try {
     await fetch('/api/auth/logout');
   } catch (e) {}
+  localStorage.removeItem(SAVED_GUEST_NAME_KEY);
   setLoggedOut();
+  renderProfileTerritory();
+  updateHexGrid(userLocation.lat, userLocation.lng);
+  if (captureCard) captureCard.classList.remove('is-held');
+  captureSeconds = 0;
   authModal.classList.remove('active');
   showToast('Erfolgreich abgemeldet.');
 });
@@ -747,12 +768,8 @@ function handlePositionChange(lat, lng) {
     currentHexLabel.textContent = `HEX: ${newHex.slice(-6).toUpperCase()}`;
     updateHudTagCount(newHex);
 
-    const currentName = currentUser?.username || localStorage.getItem(SAVED_GUEST_NAME_KEY) || 'TAGGER_01';
     const existingZone = capturedHexes.get(newHex);
-    const isMine = existingZone && (
-      existingZone.color === userColor ||
-      (existingZone.owner && existingZone.owner.toLowerCase() === currentName.toLowerCase())
-    );
+    const isMine = isZoneOwnedByMe(existingZone);
 
     // If already owned by player, start immediately as held!
     if (isMine) {
@@ -793,11 +810,7 @@ setInterval(() => {
   if (!currentHexId) return;
 
   const captured = capturedHexes.get(currentHexId);
-  const currentName = currentUser?.username || localStorage.getItem(SAVED_GUEST_NAME_KEY) || 'TAGGER_01';
-  const isMine = captured && (
-    captured.color === userColor ||
-    (captured.owner && captured.owner.toLowerCase() === currentName.toLowerCase())
-  );
+  const isMine = isZoneOwnedByMe(captured);
 
   if (isMine) {
     if (captureCard) captureCard.classList.add('is-held');
@@ -832,10 +845,12 @@ setInterval(() => {
 }, 1000);
 
 async function completeCapture(hexId) {
-  const ownerName = currentUser ? currentUser.username : (localStorage.getItem(SAVED_GUEST_NAME_KEY) || 'TAGGER_01');
+  const currentName = currentUser?.username || localStorage.getItem(SAVED_GUEST_NAME_KEY) || 'TAGGER_01';
+  const ownerId = currentUser?.id || (localStorage.getItem(SAVED_GUEST_NAME_KEY) ? `guest_${localStorage.getItem(SAVED_GUEST_NAME_KEY)}` : 'guest_anon');
 
   capturedHexes.set(hexId, {
-    owner: ownerName,
+    owner: currentName,
+    owner_id: ownerId,
     color: userColor,
     capturedAt: Date.now()
   });
@@ -847,7 +862,7 @@ async function completeCapture(hexId) {
     const res = await fetch('/api/zones/capture', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hexId, color: userColor, ownerName })
+      body: JSON.stringify({ hexId, color: userColor, ownerName: currentName })
     });
     if (res.ok) {
       const data = await res.json();
@@ -1171,11 +1186,13 @@ if (btnBuyBuilding) {
     }
 
     const currentName = currentUser?.username || localStorage.getItem(SAVED_GUEST_NAME_KEY) || 'TAGGER_01';
+    const ownerId = currentUser?.id || (localStorage.getItem(SAVED_GUEST_NAME_KEY) ? `guest_${localStorage.getItem(SAVED_GUEST_NAME_KEY)}` : 'guest_anon');
     poiManager.buyBuilding(activeSelectedPoi, currentName, userColor);
 
     // Also claim the building's hex zone for the player!
     capturedHexes.set(activeSelectedPoi.hexId, {
       owner: currentName,
+      owner_id: ownerId,
       color: userColor,
       capturedAt: Date.now()
     });
