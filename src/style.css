@@ -37,6 +37,11 @@ body, html {
   z-index: 1;
 }
 
+/* Dark Mode Filter fuer freie OpenStreetMap Tiles */
+.maplibregl-canvas-container canvas {
+  filter: brightness(0.7) invert(1) contrast(1.15) hue-rotate(200deg) saturate(0.45);
+}
+
 /* Radar Scan */
 .radar-scan {
   position: absolute;
