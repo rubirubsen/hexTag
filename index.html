@@ -20,10 +20,10 @@
   <!-- Top HUD: Game Stats -->
   <header class="hud-header">
     <div class="hud-card player-badge">
-      <div class="color-dot" id="userColorDot" title="Klicke für Farbwechsel"></div>
+      <div class="color-dot" id="userColorDot" title="Spielerfarbe"></div>
       <div class="player-info">
         <span class="player-tag" id="playerName">TAGGER_01</span>
-        <span class="player-status" id="gpsStatus">GPS: SUCHT SIGNAL...</span>
+        <span class="player-status" id="gpsStatus">GPS: WIRD ERMITTELT...</span>
       </div>
     </div>
 
@@ -33,7 +33,7 @@
     </div>
   </header>
 
-  <!-- Hex Capture Progress Card -->
+  <!-- Hex Capture Progress Card (Mobile / Dynamic) -->
   <div class="capture-overlay" id="captureCard">
     <div class="capture-header">
       <div class="hex-badge">
@@ -43,7 +43,6 @@
       <div class="capture-timer" id="timerDisplay">03:00</div>
     </div>
 
-    <!-- Hexagon Progress Bar -->
     <div class="progress-track">
       <div class="progress-fill" id="progressFillBar"></div>
       <div class="progress-glow"></div>
@@ -56,6 +55,71 @@
       </div>
     </div>
   </div>
+
+  <!-- DESKTOP STATIONARY COMMAND CENTER (Sichtbar auf Desktop-Bildschirmen) -->
+  <aside class="desktop-command-panel" id="desktopCommandPanel">
+    <div class="cmd-header">
+      <div class="cmd-title">
+        <span class="cmd-icon">🛰️</span>
+        <span>STATIONARY COMMAND</span>
+      </div>
+      <span class="device-pill">DESKTOP MODE</span>
+    </div>
+
+    <!-- HQ / Stützpunkt Section -->
+    <div class="cmd-section" id="hqSection">
+      <div class="section-title">STÜTZPUNKT (HQ)</div>
+      <div class="hq-status-box" id="hqStatusBox">
+        <div id="hqTimerView">
+          <div class="hq-timer-label">STATIONÄRER TIMER (2 MIN)</div>
+          <div class="hq-timer-val" id="hqTimerVal">00:00 / 02:00</div>
+          <div class="progress-track">
+            <div class="progress-fill" id="hqProgressFill"></div>
+          </div>
+          <small>Halte dich 2 Min am PC auf, um dein HQ zu errichten.</small>
+          <button class="action-btn primary-spray-btn" id="btnBuildHQ" disabled>HQ HIER ERRICHTEN</button>
+        </div>
+
+        <div id="hqActiveView" style="display: none;">
+          <div class="hq-active-badge">
+            <span class="hq-icon">🏢</span>
+            <div>
+              <strong id="hqActiveName">HAUPTQUARTIER</strong>
+              <small id="hqActiveHex">WABE: ...</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Drone Fleet Section -->
+    <div class="cmd-section">
+      <div class="section-title">
+        <span>DROHNEN-FLOTTE</span>
+        <span class="drone-counter" id="activeDroneCount">0 AKTIV</span>
+      </div>
+      <p class="drone-desc">Schicke Drohnen (✖) zu Nachbarwaben, um dein Gebiet per Klick zu sichern.</p>
+      
+      <button class="action-btn drone-deploy-btn" id="btnArmDrone">
+        <span>🛸 DROHNE ENTSENDEN (30 XP)</span>
+      </button>
+      <div class="drone-target-hint" id="droneTargetHint" style="display: none;">
+        🎯 Klicke auf eine Ziel-Wabe auf der Karte!
+      </div>
+    </div>
+
+    <!-- Persistent Player Color Picker -->
+    <div class="cmd-section">
+      <div class="section-title">SPIELERFARBE (PROFIL)</div>
+      <div class="color-picker-group">
+        <button class="color-btn active" style="--c: #ff0055;" data-color="#ff0055" title="Neon Pink"></button>
+        <button class="color-btn" style="--c: #00f0ff;" data-color="#00f0ff" title="Cyber Cyan"></button>
+        <button class="color-btn" style="--c: #39ff14;" data-color="#39ff14" title="Acid Green"></button>
+        <button class="color-btn" style="--c: #ffe600;" data-color="#ffe600" title="Volt Yellow"></button>
+        <button class="color-btn" style="--c: #b026ff;" data-color="#b026ff" title="Purple Ray"></button>
+      </div>
+    </div>
+  </aside>
 
   <!-- Spray Tag Action Button (Floating) -->
   <button class="fab-spray-btn" id="btnOpenSprayModal" title="Graffiti in dieser Wabe sprayen">
@@ -75,7 +139,7 @@
       <span>AR-BLICK</span>
     </button>
 
-    <div class="color-picker-group">
+    <div class="color-picker-group mobile-only-colors">
       <button class="color-btn active" style="--c: #ff0055;" data-color="#ff0055" title="Neon Pink"></button>
       <button class="color-btn" style="--c: #00f0ff;" data-color="#00f0ff" title="Cyber Cyan"></button>
       <button class="color-btn" style="--c: #39ff14;" data-color="#39ff14" title="Acid Green"></button>
@@ -83,7 +147,7 @@
       <button class="color-btn" style="--c: #b026ff;" data-color="#b026ff" title="Purple Ray"></button>
     </div>
 
-    <button class="hud-btn test-btn" id="btnSimulateMove" title="Klicke auf die Karte zum Bewegen">
+    <button class="hud-btn test-btn" id="btnSimulateMove" title="Dev Move" style="display: none;">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
       <span>MOVE</span>
     </button>
@@ -131,15 +195,13 @@
     <div class="spray-panel gallery-panel">
       <div class="modal-header">
         <div class="modal-title">
-          <span>WAFEN-TAGS & GRAFFITIS</span>
+          <span>WABEN-TAGS & GRAFFITIS</span>
           <small id="galleryHexLabel">HEX: ...</small>
         </div>
         <button class="close-modal-btn" id="btnCloseGalleryModal">✕</button>
       </div>
 
-      <div class="gallery-grid" id="galleryGrid">
-        <!-- Dynamische Tags werden hier gerendert -->
-      </div>
+      <div class="gallery-grid" id="galleryGrid"></div>
     </div>
   </div>
 

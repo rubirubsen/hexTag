@@ -3,20 +3,29 @@ import * as h3 from 'h3-js';
 import { GraffitiCanvas } from './graffitiCanvas.js';
 import { tagStore } from './tagStore.js';
 import { ARViewer } from './arViewer.js';
+import { DroneManager } from './droneManager.js';
 
 // --- GAME CONFIGURATION ---
-const H3_RESOLUTION = 10; // ~40m Kantenlaenge
-const CAPTURE_TIME_SECONDS = 180; // 3 Minuten Regelzeit
+const H3_RESOLUTION = 10;
+const CAPTURE_TIME_SECONDS = 180;
 const PASSIVE_XP_PER_MINUTE = 10;
 const SPRAY_XP_REWARD = 20;
+const DRONE_DEPLOY_COST_XP = 30;
+
+// Persistent Player Color
+const SAVED_COLOR_KEY = 'hextag_user_color';
+let userColor = localStorage.getItem(SAVED_COLOR_KEY) || '#ff0055';
+document.documentElement.style.setProperty('--user-color', userColor);
 
 // State
-let userColor = '#ff0055';
-let userLocation = { lat: 52.520008, lng: 13.404954 }; // Default: Berlin Alexanderplatz
+let userLocation = { lat: 52.520008, lng: 13.404954 };
 let currentHexId = null;
 let captureSeconds = 0;
-let totalXp = 0;
+let totalXp = 50; // Start-XP fuer erste Drohnentests
 let isSimulating = false;
+let isFollowingUser = true;
+let watchId = null;
+let isTargetingDrone = false;
 
 // Hexagon Storage: hexId -> { owner: string, color: string, capturedAt: number }
 const capturedHexes = new Map();
@@ -32,18 +41,32 @@ const gpsStatus = document.getElementById('gpsStatus');
 const toast = document.getElementById('toast');
 const userColorDot = document.getElementById('userColorDot');
 
-// Modals & Panels
+// Desktop HQ & Drone Elements
+const hqTimerVal = document.getElementById('hqTimerVal');
+const hqProgressFill = document.getElementById('hqProgressFill');
+const btnBuildHQ = document.getElementById('btnBuildHQ');
+const hqTimerView = document.getElementById('hqTimerView');
+const hqActiveView = document.getElementById('hqActiveView');
+const hqActiveHex = document.getElementById('hqActiveHex');
+const activeDroneCount = document.getElementById('activeDroneCount');
+const btnArmDrone = document.getElementById('btnArmDrone');
+const droneTargetHint = document.getElementById('droneTargetHint');
+
+// Modals
 const sprayModal = document.getElementById('sprayModal');
 const sprayModalHexLabel = document.getElementById('sprayModalHexLabel');
 const galleryModal = document.getElementById('galleryModal');
 const galleryHexLabel = document.getElementById('galleryHexLabel');
 const galleryGrid = document.getElementById('galleryGrid');
 
+totalXpDisplay.textContent = totalXp;
+userColorDot.style.background = userColor;
+userColorDot.style.boxShadow = `0 0 12px ${userColor}`;
+
 // --- 1. INITIALIZE CANVAS & AR VIEWER ---
 const sprayCanvasEl = document.getElementById('sprayCanvas');
 let graffitiCanvas = null;
 
-// Initialisiere Canvas nach erstem Rendern
 setTimeout(() => {
   graffitiCanvas = new GraffitiCanvas(sprayCanvasEl);
   graffitiCanvas.setBrushColor(userColor);
@@ -52,10 +75,10 @@ setTimeout(() => {
 const arContainer = document.getElementById('arContainer');
 const arVideo = document.getElementById('arVideo');
 const arViewer = new ARViewer(arVideo, arContainer, () => {
-  console.log('[hexTag] AR-Blick beendet.');
+  console.log('[hexTag] AR beendet.');
 });
 
-// --- 2. INITIALIZE MAP (OpenStreetMap - 100% Free & No API Key) ---
+// --- 2. INITIALIZE MAP (OpenStreetMap - 100% Free & No Key) ---
 const map = new maplibregl.Map({
   container: 'map',
   style: {
@@ -63,11 +86,9 @@ const map = new maplibregl.Map({
     sources: {
       'osm-tiles': {
         type: 'raster',
-        tiles: [
-          'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
-        ],
+        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
         tileSize: 256,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        attribution: '&copy; OpenStreetMap contributors'
       }
     },
     layers: [
@@ -81,29 +102,30 @@ const map = new maplibregl.Map({
     ]
   },
   center: [userLocation.lng, userLocation.lat],
-  zoom: 17,
-  pitch: 45,
+  zoom: 17.5,
+  pitch: 40,
   bearing: -15
 });
 
-// Custom Player GPS Marker
 const markerEl = document.createElement('div');
 markerEl.className = 'user-marker';
 const playerMarker = new maplibregl.Marker({ element: markerEl })
   .setLngLat([userLocation.lng, userLocation.lat])
   .addTo(map);
 
-// --- 3. MAP LOAD & HEX LAYERS ---
-map.on('load', () => {
-  console.log('[hexTag] Karte geladen. Initialisiere H3-Waben-Layer...');
+// --- 3. DRONE & HQ MANAGER ---
+let droneManager = null;
 
-  // Hex GeoJSON Source
+map.on('load', () => {
+  console.log('[hexTag] Initialisiere Map & Drohnen-Manager...');
+
+  droneManager = new DroneManager(map, handleDroneManagerUpdate);
+
   map.addSource('hex-grid', {
     type: 'geojson',
     data: { type: 'FeatureCollection', features: [] }
   });
 
-  // 1. Hex Fill Layer
   map.addLayer({
     id: 'hex-fill',
     type: 'fill',
@@ -114,7 +136,6 @@ map.on('load', () => {
     }
   });
 
-  // 2. Hex Outer Borders
   map.addLayer({
     id: 'hex-borders',
     type: 'line',
@@ -126,12 +147,12 @@ map.on('load', () => {
     }
   });
 
-  // Initial Grid Update
   updateHexGrid(userLocation.lat, userLocation.lng);
   startGeolocation();
+  syncColorButtons();
 });
 
-// --- 4. H3 GRID & GEOJSON GENERATION ---
+// --- 4. H3 GRID & GEOJSON ---
 function updateHexGrid(lat, lng) {
   try {
     const centerHex = h3.latLngToCell(lat, lng, H3_RESOLUTION);
@@ -145,6 +166,9 @@ function updateHexGrid(lat, lng) {
       const captured = capturedHexes.get(hex);
       const tagCount = tagStore.getTagCountForHex(hex);
 
+      // Pruefen, ob aktive Drohne in der Wabe ist
+      const hasDrone = droneManager && droneManager.drones.some(d => d.targetHexId === hex);
+
       let fillColor = '#000000';
       let fillOpacity = 0.05;
       let strokeColor = 'rgba(0, 240, 255, 0.2)';
@@ -157,8 +181,15 @@ function updateHexGrid(lat, lng) {
         strokeWidth = 2.5;
       }
 
+      if (hasDrone) {
+        fillColor = userColor;
+        fillOpacity = 0.35;
+        strokeColor = '#00f0ff';
+        strokeWidth = 3;
+      }
+
       if (tagCount > 0) {
-        strokeColor = '#ffe600'; // Gelb leuchtender Rand bei vorhandenen Tags
+        strokeColor = '#ffe600';
       }
 
       if (isCurrent) {
@@ -179,8 +210,7 @@ function updateHexGrid(lat, lng) {
           fillColor,
           fillOpacity,
           strokeColor,
-          strokeWidth,
-          tagCount
+          strokeWidth
         },
         geometry: {
           type: 'Polygon',
@@ -198,13 +228,8 @@ function updateHexGrid(lat, lng) {
   }
 }
 
-// GPS & Camera Tracking State
-let isFollowingUser = true; // Automatische Verfolgung aktiv
-let watchId = null;
-
 // --- 5. GPS & STANDORTVERARBEITUNG ---
 async function startGeolocation() {
-  // 1. Sofortiges IP-Lookup fuer grobe Position
   try {
     const ipRes = await fetch('https://ipapi.co/json/');
     if (ipRes.ok) {
@@ -212,9 +237,7 @@ async function startGeolocation() {
       if (ipData.latitude && ipData.longitude && !isSimulating) {
         userLocation = { lat: ipData.latitude, lng: ipData.longitude };
         playerMarker.setLngLat([userLocation.lng, userLocation.lat]);
-        if (isFollowingUser) {
-          map.setCenter([userLocation.lng, userLocation.lat]);
-        }
+        if (isFollowingUser) map.setCenter([userLocation.lng, userLocation.lat]);
         handlePositionChange(userLocation.lat, userLocation.lng);
         gpsStatus.textContent = `ORT: ${ipData.city || 'ERMITTELT'}`;
       }
@@ -223,35 +246,21 @@ async function startGeolocation() {
     console.log('[hexTag] IP-Lookup uebersprungen:', e);
   }
 
-  // 2. Echtes Geraete-GPS
   if (!navigator.geolocation) {
     gpsStatus.textContent = 'GPS: NICHT UNTERSTÜTZT';
     return;
   }
 
-  // Sofortige einmalige Abfrage
   navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      applyGPSUpdate(pos, true);
-    },
-    (err) => {
-      console.warn('[hexTag] Geolocation getCurrentPosition:', err.message);
-    },
+    (pos) => applyGPSUpdate(pos, true),
+    (err) => console.warn('[hexTag] getCurrentPosition:', err.message),
     { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
   );
 
-  // Kontinuierliches Watch-Tracking
   if (watchId) navigator.geolocation.clearWatch(watchId);
   watchId = navigator.geolocation.watchPosition(
-    (pos) => {
-      applyGPSUpdate(pos, false);
-    },
-    (err) => {
-      console.warn('[hexTag] WatchPosition:', err.message);
-      if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-        gpsStatus.textContent = 'GPS: HTTPS NÖTIG';
-      }
-    },
+    (pos) => applyGPSUpdate(pos, false),
+    (err) => console.warn('[hexTag] WatchPosition:', err.message),
     { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
   );
 }
@@ -259,7 +268,7 @@ async function startGeolocation() {
 function applyGPSUpdate(pos, isInstantJump = false) {
   if (isSimulating) return;
 
-  const { latitude, longitude, accuracy, heading } = pos.coords;
+  const { latitude, longitude, accuracy } = pos.coords;
   userLocation = { lat: latitude, lng: longitude };
 
   playerMarker.setLngLat([longitude, latitude]);
@@ -267,7 +276,7 @@ function applyGPSUpdate(pos, isInstantJump = false) {
 
   if (isFollowingUser) {
     if (isInstantJump) {
-      map.flyTo({ center: [longitude, latitude], zoom: 17.5, pitch: 40, speed: 1.8, curve: 1 });
+      map.flyTo({ center: [longitude, latitude], zoom: 17.5, pitch: 40, speed: 1.8 });
     } else {
       map.easeTo({ center: [longitude, latitude], duration: 800 });
     }
@@ -276,7 +285,6 @@ function applyGPSUpdate(pos, isInstantJump = false) {
   handlePositionChange(latitude, longitude);
 }
 
-// Wenn der Nutzer die Karte manuell wischt/bewegt -> Auto-Follow deaktivieren
 map.on('dragstart', () => {
   isFollowingUser = false;
   const btn = document.getElementById('btnCenterMap');
@@ -289,10 +297,7 @@ function handlePositionChange(lat, lng) {
   if (newHex !== currentHexId) {
     currentHexId = newHex;
     currentHexLabel.textContent = `HEX: ${newHex.slice(-6).toUpperCase()}`;
-
-    // Update Tag Counter auf dem HUD
     updateHudTagCount(newHex);
-
     captureSeconds = 0;
     showToast(`ZONE BETRETEN: ${newHex.slice(-6).toUpperCase()}`);
   }
@@ -305,8 +310,13 @@ function updateHudTagCount(hexId) {
   hexTagCount.textContent = `🎨 ${count} Tag${count === 1 ? '' : 's'}`;
 }
 
-// --- 6. CAPTURE & TICK LOOP ---
+// --- 6. GAME LOOP (Sekundentakt) ---
 setInterval(() => {
+  // Drone & HQ Update
+  if (droneManager) {
+    droneManager.update(1);
+  }
+
   if (!currentHexId) return;
 
   const captured = capturedHexes.get(currentHexId);
@@ -357,14 +367,119 @@ function completeCapture(hexId) {
   updateHexGrid(userLocation.lat, userLocation.lng);
 }
 
-// --- 7. SPRAY MODAL & GRAFFITI ENGINE ---
-const btnOpenSprayModal = document.getElementById('btnOpenSprayModal');
-const btnCloseSprayModal = document.getElementById('btnCloseSprayModal');
-const btnSubmitSpray = document.getElementById('btnSubmitSpray');
-const btnUndoCanvas = document.getElementById('btnUndoCanvas');
-const btnClearCanvas = document.getElementById('btnClearCanvas');
-const brushSizeSlider = document.getElementById('brushSizeSlider');
+// --- 7. DESKTOP HQ & DROHNEN LOGIK ---
+function handleDroneManagerUpdate(data) {
+  // HQ UI
+  if (data.hq) {
+    hqTimerView.style.display = 'none';
+    hqActiveView.style.display = 'block';
+    hqActiveHex.textContent = `WABE: ${data.hq.hexId.slice(-6).toUpperCase()}`;
+  } else {
+    hqTimerView.style.display = 'block';
+    hqActiveView.style.display = 'none';
 
+    const min = Math.floor(data.hqTimerSeconds / 60);
+    const sec = data.hqTimerSeconds % 60;
+    const reqMin = Math.floor(data.hqTimerRequired / 60);
+    const reqSec = data.hqTimerRequired % 60;
+    hqTimerVal.textContent = `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')} / ${String(reqMin).padStart(2, '0')}:${String(reqSec).padStart(2, '0')}`;
+
+    const progress = Math.min(data.hqTimerSeconds / data.hqTimerRequired, 1.0);
+    hqProgressFill.style.width = `${(progress * 100).toFixed(0)}%`;
+
+    if (data.isHqEligible) {
+      btnBuildHQ.disabled = false;
+      btnBuildHQ.textContent = '⚡ HQ HIER ERRICHTEN!';
+    }
+  }
+
+  // Drohnen Counter
+  activeDroneCount.textContent = `${data.activeDrones.length} AKTIV`;
+}
+
+btnBuildHQ.addEventListener('click', () => {
+  if (!currentHexId || !droneManager) return;
+
+  droneManager.saveHQ({
+    hexId: currentHexId,
+    lat: userLocation.lat,
+    lng: userLocation.lng,
+    name: 'STÜTZPUNKT ALPHA',
+    color: userColor,
+    createdAt: Date.now()
+  });
+
+  showToast('🏢 STÜTZPUNKT ERFOLGREICH ERRICHTET!');
+});
+
+btnArmDrone.addEventListener('click', () => {
+  if (totalXp < DRONE_DEPLOY_COST_XP) {
+    showToast(`⚠️ Nicht genug XP! Du benötigst ${DRONE_DEPLOY_COST_XP} XP.`);
+    return;
+  }
+
+  isTargetingDrone = !isTargetingDrone;
+  droneTargetHint.style.display = isTargetingDrone ? 'block' : 'none';
+  btnArmDrone.style.background = isTargetingDrone ? '#ffe600' : '';
+  btnArmDrone.style.color = isTargetingDrone ? '#000' : '#fff';
+
+  if (isTargetingDrone) {
+    showToast('🎯 Klicke auf eine Wabe auf der Karte!');
+  }
+});
+
+// Map Click: Drohnen-Entsendung ODER Waben-Inspektion
+map.on('click', (e) => {
+  const clickedHex = h3.latLngToCell(e.lngLat.lat, e.lngLat.lng, H3_RESOLUTION);
+  const [tLat, tLng] = h3.cellToLatLng(clickedHex);
+
+  // Drohne entsenden
+  if (isTargetingDrone && droneManager) {
+    isTargetingDrone = false;
+    droneTargetHint.style.display = 'none';
+    btnArmDrone.style.background = '';
+    btnArmDrone.style.color = '#fff';
+
+    totalXp -= DRONE_DEPLOY_COST_XP;
+    totalXpDisplay.textContent = totalXp;
+
+    droneManager.deployDrone({
+      targetHexId: clickedHex,
+      targetLat: tLat,
+      targetLng: tLng,
+      color: userColor
+    });
+
+    // Drohne erobert Wabe waehrend des Einsatzes
+    capturedHexes.set(clickedHex, {
+      owner: 'DROHNE (HQ)',
+      color: userColor,
+      capturedAt: Date.now()
+    });
+
+    showToast(`🛸 DROHNE (✖) ZU WABE ${clickedHex.slice(-4).toUpperCase()} ENTSANDT!`);
+    updateHexGrid(userLocation.lat, userLocation.lng);
+    return;
+  }
+
+  // Normaler Waben-Inspektor
+  const captured = capturedHexes.get(clickedHex);
+  const tagCount = tagStore.getTagCountForHex(clickedHex);
+
+  if (clickedHex === currentHexId) {
+    showToast(`📍 Deine aktuelle Wabe (${clickedHex.slice(-6).toUpperCase()})`);
+  } else if (captured) {
+    showToast(`🛡️ Wabe ${clickedHex.slice(-6).toUpperCase()} gehört ${captured.owner}`);
+  } else {
+    showToast(`⬡ Freie Wabe ${clickedHex.slice(-6).toUpperCase()}`);
+  }
+
+  if (tagCount > 0) {
+    openGalleryForHex(clickedHex);
+  }
+});
+
+// --- 8. SPRAY MODAL & GRAFFITI ---
 btnOpenSprayModal.addEventListener('click', () => {
   if (!currentHexId) return;
   sprayModalHexLabel.textContent = `WABE: ${currentHexId.slice(-6).toUpperCase()}`;
@@ -379,7 +494,6 @@ btnCloseSprayModal.addEventListener('click', () => {
   sprayModal.classList.remove('active');
 });
 
-// Brush Modes
 document.querySelectorAll('.tool-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
@@ -395,7 +509,6 @@ brushSizeSlider.addEventListener('input', (e) => {
 btnUndoCanvas.addEventListener('click', () => graffitiCanvas && graffitiCanvas.undo());
 btnClearCanvas.addEventListener('click', () => graffitiCanvas && graffitiCanvas.clear());
 
-// Graffiti Einreichen
 btnSubmitSpray.addEventListener('click', () => {
   if (!graffitiCanvas || !currentHexId) return;
 
@@ -412,16 +525,13 @@ btnSubmitSpray.addEventListener('click', () => {
   totalXp += SPRAY_XP_REWARD;
   totalXpDisplay.textContent = totalXp;
 
-  showToast(`🎨 TAG ERFOLGREICH GESPRÜHT! (+${SPRAY_XP_REWARD} XP)`);
+  showToast(`🎨 TAG GESPRÜHT! (+${SPRAY_XP_REWARD} XP)`);
   sprayModal.classList.remove('active');
   updateHudTagCount(currentHexId);
   updateHexGrid(userLocation.lat, userLocation.lng);
 });
 
-// --- 8. HEX TAG GALLERY MODAL ---
-const btnOpenHexGallery = document.getElementById('btnOpenHexGallery');
-const btnCloseGalleryModal = document.getElementById('btnCloseGalleryModal');
-
+// --- 9. GALLERY & AR ---
 btnOpenHexGallery.addEventListener('click', () => {
   if (!currentHexId) return;
   openGalleryForHex(currentHexId);
@@ -437,7 +547,7 @@ function openGalleryForHex(hexId) {
 
   galleryGrid.innerHTML = '';
   if (tags.length === 0) {
-    galleryGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-dim); padding: 30px 0;">Noch keine Tags in dieser Wabe.<br>Sei der Erste und spraye ein Graffiti!</div>';
+    galleryGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-dim); padding: 30px 0;">Noch keine Tags vorhanden.</div>';
   } else {
     tags.forEach(t => {
       const card = document.createElement('div');
@@ -456,45 +566,44 @@ function openGalleryForHex(hexId) {
   galleryModal.classList.add('active');
 }
 
-// --- 9. AR CAMERA VIEWER ---
-const btnToggleAR = document.getElementById('btnToggleAR');
-const btnCloseAR = document.getElementById('btnCloseAR');
-
 btnToggleAR.addEventListener('click', () => {
   if (!currentHexId) return;
   const currentTags = tagStore.getTagsForHex(currentHexId);
   arViewer.start(currentTags);
 });
 
-btnCloseAR.addEventListener('click', () => {
-  arViewer.stop();
-});
+btnCloseAR.addEventListener('click', () => arViewer.stop());
 
-// --- 10. UI HELPERS & COLOR PICKER ---
-function showToast(msg) {
-  toast.textContent = msg;
-  toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), 3000);
+// --- 10. COLOR PICKER & HELPERS ---
+function syncColorButtons() {
+  document.querySelectorAll('.color-btn').forEach(btn => {
+    if (btn.dataset.color === userColor) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
 }
 
 document.querySelectorAll('.color-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
     userColor = btn.dataset.color;
+    localStorage.setItem(SAVED_COLOR_KEY, userColor);
+
     document.documentElement.style.setProperty('--user-color', userColor);
     userColorDot.style.background = userColor;
     userColorDot.style.boxShadow = `0 0 12px ${userColor}`;
 
+    syncColorButtons();
+
     if (graffitiCanvas) graffitiCanvas.setBrushColor(userColor);
     updateHexGrid(userLocation.lat, userLocation.lng);
-    showToast(`Farbe: ${btn.title}`);
+    showToast(`Farbe gewählt: ${btn.title}`);
   });
 });
 
 document.getElementById('btnCenterMap').addEventListener('click', () => {
   isFollowingUser = true;
-  isSimulating = false;
   const btn = document.getElementById('btnCenterMap');
   if (btn) btn.classList.remove('needs-center');
 
@@ -506,7 +615,6 @@ document.getElementById('btnCenterMap').addEventListener('click', () => {
       },
       (err) => {
         map.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 17.5, pitch: 40, speed: 1.6 });
-        showToast('Standort zentriert');
       },
       { enableHighAccuracy: true, timeout: 5000 }
     );
@@ -515,45 +623,8 @@ document.getElementById('btnCenterMap').addEventListener('click', () => {
   }
 });
 
-// Dev-Mode Check fuer den "MOVE"-Button
-const urlParams = new URLSearchParams(window.location.search);
-const isDevMode = urlParams.get('dev') === 'true' || urlParams.get('test') === '1';
-const btnSimulateMove = document.getElementById('btnSimulateMove');
-
-if (btnSimulateMove) {
-  if (!isDevMode) {
-    btnSimulateMove.style.display = 'none';
-  } else {
-    btnSimulateMove.addEventListener('click', () => {
-      isSimulating = true;
-      const dLat = (Math.random() - 0.5) * 0.0008;
-      const dLng = (Math.random() - 0.5) * 0.0008;
-      userLocation.lat += dLat;
-      userLocation.lng += dLng;
-
-      playerMarker.setLngLat([userLocation.lng, userLocation.lat]);
-      map.easeTo({ center: [userLocation.lng, userLocation.lat] });
-      handlePositionChange(userLocation.lat, userLocation.lng);
-    });
-  }
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 3000);
 }
-
-// Klick auf eine Wabe auf der Karte -> Waben-Details & Tags inspizieren
-map.on('click', (e) => {
-  const clickedHex = h3.latLngToCell(e.lngLat.lat, e.lngLat.lng, H3_RESOLUTION);
-  const captured = capturedHexes.get(clickedHex);
-  const tagCount = tagStore.getTagCountForHex(clickedHex);
-
-  if (clickedHex === currentHexId) {
-    showToast(`📍 Deine aktuelle Wabe (${clickedHex.slice(-6).toUpperCase()})`);
-  } else if (captured) {
-    showToast(`🛡️ Wabe ${clickedHex.slice(-6).toUpperCase()} gehört ${captured.owner} | ${tagCount} Tags`);
-  } else {
-    showToast(`⬡ Freie Wabe ${clickedHex.slice(-6).toUpperCase()} | ${tagCount} Tags`);
-  }
-
-  // Wenn Wabe Tags hat, Galerie auf Wunsch oeffnen
-  if (tagCount > 0) {
-    openGalleryForHex(clickedHex);
-  }
-});
