@@ -14,7 +14,7 @@ const DRONE_DEPLOY_COST_XP = 30;
 
 // Persistent Player Color
 const SAVED_COLOR_KEY = 'hextag_user_color';
-let userColor = localStorage.getItem(SAVED_COLOR_KEY) || '#ff0055';
+let userColor = localStorage.getItem(SAVED_COLOR_KEY) || '#ff8000';
 document.documentElement.style.setProperty('--user-color', userColor);
 
 // State

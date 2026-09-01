@@ -1,11 +1,12 @@
 :root {
-  --bg-color: #07090e;
-  --panel-bg: rgba(13, 17, 27, 0.88);
-  --panel-border: rgba(0, 240, 255, 0.28);
-  --user-color: #ff0055;
-  --accent-cyan: #00f0ff;
-  --text-main: #f0f4fc;
-  --text-dim: #7a889b;
+  --bg-color: #12151c;
+  --panel-bg: rgba(26, 29, 36, 0.90);
+  --panel-border: rgba(255, 128, 0, 0.35);
+  --user-color: #ff8000;
+  --accent-orange: #ff8000;
+  --accent-cyan: #ff8000;
+  --text-main: #ffffff;
+  --text-dim: #9da8b6;
   --font-display: 'Orbitron', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-body: 'Rajdhani', -apple-system, BlinkMacSystemFont, sans-serif;
 }
@@ -73,7 +74,7 @@ body, html {
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--panel-border);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 12px rgba(0, 240, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), inset 0 0 12px rgba(255, 128, 0, 0.08);
   border-radius: 14px;
   padding: 8px 14px;
   display: flex;
