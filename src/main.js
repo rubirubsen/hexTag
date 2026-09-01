@@ -198,74 +198,90 @@ function updateHexGrid(lat, lng) {
   }
 }
 
+// GPS & Camera Tracking State
+let isFollowingUser = true; // Automatische Verfolgung aktiv
+let watchId = null;
+
 // --- 5. GPS & STANDORTVERARBEITUNG ---
 async function startGeolocation() {
-  // 1. Initialer IP-Lookup (sofortige echte Stadt statt starr Berlin, falls HTTP/GPS noch blockiert ist)
+  // 1. Sofortiges IP-Lookup fuer grobe Position
   try {
     const ipRes = await fetch('https://ipapi.co/json/');
     if (ipRes.ok) {
       const ipData = await ipRes.json();
       if (ipData.latitude && ipData.longitude && !isSimulating) {
         userLocation = { lat: ipData.latitude, lng: ipData.longitude };
-        map.setCenter([userLocation.lng, userLocation.lat]);
         playerMarker.setLngLat([userLocation.lng, userLocation.lat]);
+        if (isFollowingUser) {
+          map.setCenter([userLocation.lng, userLocation.lat]);
+        }
         handlePositionChange(userLocation.lat, userLocation.lng);
-        gpsStatus.textContent = `STANDORT: ${ipData.city || 'ERMITTELT'}`;
+        gpsStatus.textContent = `ORT: ${ipData.city || 'ERMITTELT'}`;
       }
     }
   } catch (e) {
     console.log('[hexTag] IP-Lookup uebersprungen:', e);
   }
 
-  // 2. Echtes Geraete-GPS anfordern
+  // 2. Echtes Geraete-GPS
   if (!navigator.geolocation) {
     gpsStatus.textContent = 'GPS: NICHT UNTERSTÜTZT';
     return;
   }
 
+  // Sofortige einmalige Abfrage
   navigator.geolocation.getCurrentPosition(
     (pos) => {
-      const { latitude, longitude, accuracy } = pos.coords;
-      userLocation = { lat: latitude, lng: longitude };
-      isSimulating = false;
-
-      playerMarker.setLngLat([longitude, latitude]);
-      map.flyTo({ center: [longitude, latitude], zoom: 17, speed: 1.5 });
-      gpsStatus.textContent = `GPS: ±${Math.round(accuracy)}m`;
-      handlePositionChange(latitude, longitude);
-      showToast('🛰️ ECHTER GPS-STANDORT AKTIV!');
+      applyGPSUpdate(pos, true);
     },
     (err) => {
-      console.warn('[hexTag] GPS-Fehler:', err.message);
+      console.warn('[hexTag] Geolocation getCurrentPosition:', err.message);
+    },
+    { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+  );
+
+  // Kontinuierliches Watch-Tracking
+  if (watchId) navigator.geolocation.clearWatch(watchId);
+  watchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      applyGPSUpdate(pos, false);
+    },
+    (err) => {
+      console.warn('[hexTag] WatchPosition:', err.message);
       if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-        gpsStatus.textContent = 'GPS: HTTPS ERFORDERLICH';
-        showToast('⚠️ Hinweis: Browser erlauben GPS nur über HTTPS oder Domain!');
-      } else {
-        gpsStatus.textContent = 'GPS: BITTE FREIGEBEN';
+        gpsStatus.textContent = 'GPS: HTTPS NÖTIG';
       }
     },
-    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-  );
-
-  // Kontinuierliches GPS-Tracking
-  navigator.geolocation.watchPosition(
-    (pos) => {
-      if (isSimulating) return;
-
-      const { latitude, longitude, accuracy } = pos.coords;
-      userLocation = { lat: latitude, lng: longitude };
-
-      playerMarker.setLngLat([longitude, latitude]);
-      gpsStatus.textContent = `GPS: ±${Math.round(accuracy)}m`;
-
-      handlePositionChange(latitude, longitude);
-    },
-    (err) => {
-      console.warn('[hexTag] WatchPosition Fallback:', err.message);
-    },
-    { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
+    { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
   );
 }
+
+function applyGPSUpdate(pos, isInstantJump = false) {
+  if (isSimulating) return;
+
+  const { latitude, longitude, accuracy, heading } = pos.coords;
+  userLocation = { lat: latitude, lng: longitude };
+
+  playerMarker.setLngLat([longitude, latitude]);
+  gpsStatus.textContent = `GPS: ±${Math.round(accuracy)}m`;
+
+  if (isFollowingUser) {
+    if (isInstantJump) {
+      map.flyTo({ center: [longitude, latitude], zoom: 17.5, pitch: 40, speed: 1.8, curve: 1 });
+    } else {
+      map.easeTo({ center: [longitude, latitude], duration: 800 });
+    }
+  }
+
+  handlePositionChange(latitude, longitude);
+}
+
+// Wenn der Nutzer die Karte manuell wischt/bewegt -> Auto-Follow deaktivieren
+map.on('dragstart', () => {
+  isFollowingUser = false;
+  const btn = document.getElementById('btnCenterMap');
+  if (btn) btn.classList.add('needs-center');
+});
 
 function handlePositionChange(lat, lng) {
   const newHex = h3.latLngToCell(lat, lng, H3_RESOLUTION);
@@ -477,25 +493,25 @@ document.querySelectorAll('.color-btn').forEach(btn => {
 });
 
 document.getElementById('btnCenterMap').addEventListener('click', () => {
+  isFollowingUser = true;
+  isSimulating = false;
+  const btn = document.getElementById('btnCenterMap');
+  if (btn) btn.classList.remove('needs-center');
+
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        isSimulating = false;
-        userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        playerMarker.setLngLat([userLocation.lng, userLocation.lat]);
-        map.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 17, speed: 1.5 });
-        handlePositionChange(userLocation.lat, userLocation.lng);
-        gpsStatus.textContent = `GPS: ±${Math.round(pos.coords.accuracy)}m`;
-        showToast('🛰️ GPS ZENTRIERT!');
+        applyGPSUpdate(pos, true);
+        showToast('🛰️ GPS ZENTRIERT & GEKOPPELT!');
       },
       (err) => {
-        map.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 17, speed: 1.5 });
-        showToast('GPS nicht freigegeben (Zentriere auf Karte)');
+        map.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 17.5, pitch: 40, speed: 1.6 });
+        showToast('Standort zentriert');
       },
       { enableHighAccuracy: true, timeout: 5000 }
     );
   } else {
-    map.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 17, speed: 1.5 });
+    map.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 17.5, pitch: 40, speed: 1.6 });
   }
 });
 

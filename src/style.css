@@ -303,6 +303,14 @@ body, html {
   border-color: var(--accent-cyan);
 }
 
+.hud-btn.needs-center {
+  background: rgba(0, 240, 255, 0.2);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
+  animation: pulse-glow 1.5s infinite ease-in-out;
+}
+
 .ar-btn {
   color: var(--accent-cyan);
   border-color: rgba(0, 240, 255, 0.3);
