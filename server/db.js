@@ -16,8 +16,7 @@ const config = {
   }
 };
 
-let pool = null;
-let isConnected = false;
+import { runMigration } from './migrate.js';
 
 export async function initDatabase() {
   if (!process.env.DB_PASSWORD && !process.env.DB_SERVER) {
@@ -26,11 +25,13 @@ export async function initDatabase() {
   }
 
   try {
+    // 1. Schema & Migrationen anwenden
+    await runMigration();
+
+    // 2. Globalen Connection Pool fuer den laufenden Server oeffnen
     pool = await sql.connect(config);
     isConnected = true;
     console.log(`[Database] Erfolgreich mit Microsoft SQL Server verbunden: ${config.server}:${config.port}/${config.database}`);
-
-    await createTables();
     return true;
   } catch (err) {
     console.warn(`[Database] Verbindung zu MSSQL (${config.server}) fehlgeschlagen:`, err.message);
