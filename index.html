@@ -37,9 +37,43 @@
       <div class="stat-value" id="totalXpDisplay">0</div>
     </div>
 
-    <button class="hud-card sound-btn-card" id="btnToggleSound" title="Cyberpunk Soundeffekte An/Aus">
-      <span id="soundIcon">🔊</span>
-    </button>
+    <div class="hud-menu-wrapper">
+      <button class="hud-card burger-menu-btn" id="btnBurgerMenu" title="Menü & Optionen">
+        <span class="burger-icon">☰</span>
+      </button>
+      
+      <!-- CYBER DROPDOWN MENU -->
+      <div class="hud-dropdown-menu" id="hudDropdownMenu">
+        <div class="dropdown-header">SYSTEM-MENÜ</div>
+        
+        <!-- 1. SOUND TOGGLE SWITCH -->
+        <div class="dropdown-item" id="btnMenuSoundToggle">
+          <div class="dropdown-item-left">
+            <span id="menuSoundIcon">🔊</span>
+            <span>Sound</span>
+          </div>
+          <span class="dropdown-switch-badge on" id="menuSoundState">AN</span>
+        </div>
+
+        <!-- 2. SPIELANLEITUNG (GUIDE) -->
+        <div class="dropdown-item" id="btnMenuOpenGuide">
+          <div class="dropdown-item-left">
+            <span>📖</span>
+            <span>Anleitung</span>
+          </div>
+          <span class="dropdown-arrow">❯</span>
+        </div>
+
+        <!-- 3. FAQ (VORBEREITET) -->
+        <div class="dropdown-item" id="btnMenuOpenFaq">
+          <div class="dropdown-item-left">
+            <span>❓</span>
+            <span>FAQ & Hilfe</span>
+          </div>
+          <span class="dropdown-arrow">❯</span>
+        </div>
+      </div>
+    </div>
   </header>
 
   <!-- Floating XP & Loot Reward Container -->
@@ -471,6 +505,82 @@
       </div>
 
       <div class="gallery-grid" id="galleryGrid"></div>
+  <!-- GAME GUIDE & TUTORIAL MODAL -->
+  <div class="modal-backdrop" id="guideModal">
+    <div class="spray-panel guide-panel" style="max-width: 520px; width: 94%; max-height: 88vh; overflow-y: auto;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span>📖 SPIELANLEITUNG & GUIDE</span>
+          <small>HEXTAG • CYBER TERRITORY & STREET ART</small>
+        </div>
+        <button class="close-modal-btn" id="btnCloseGuideModal">✕</button>
+      </div>
+
+      <div class="guide-content" style="padding: 16px; display: flex; flex-direction: column; gap: 14px;">
+        <!-- 1. WABEN -->
+        <div class="guide-card">
+          <div class="guide-card-header">
+            <span class="guide-icon">⬡</span>
+            <strong>1. Waben & Territorium</strong>
+          </div>
+          <p>Bewege dich draußen in eine freie Wabe und bleibe <strong>3 Minuten</strong> darin. Nach Ablauf der Zeit gehört die Wabe deinem Profil und bringt dir <strong>+10 XP pro Minute</strong> ein!</p>
+        </div>
+
+        <!-- 2. GEBÄUDE -->
+        <div class="guide-card">
+          <div class="guide-card-header">
+            <span class="guide-icon">🏢</span>
+            <strong>2. Reale OSM-Gebäude & Festungsbau</strong>
+          </div>
+          <p>Waben alleine sind verwundbar. Tippe auf Gebäude der realen Welt (z. B. Cafés, Bahnhöfe, Denkmäler) und kaufe sie für <strong>75 💎 Data Bits</strong>:</p>
+          <ul>
+            <li><strong>⚡ EMP-Turrets:</strong> Erhöhen die gegnerische Eroberungszeit von 3 auf bis zu 10 Minuten und wehren Drohnen ab.</li>
+            <li><strong>🛡️ Plasma-Schilde:</strong> Schützen die Wabe mit 100 HP vor feindlichen Zugriffen.</li>
+            <li><strong>📡 Signal-Beacons:</strong> Dienen als Funk-Relais für Drohnen.</li>
+          </ul>
+        </div>
+
+        <!-- 3. DATA BITS -->
+        <div class="guide-card">
+          <div class="guide-card-header">
+            <span class="guide-icon">💎</span>
+            <strong>3. Data Bits & Data-Spender</strong>
+          </div>
+          <p>Laufe durch die Straßen, um funkelnde <strong>1-Bit-Diamanten (1 Bit = 1 Bit)</strong> magnetisch aufzusaugen. Bestimmte Gebäude (Cafés, Bahnhöfe, Funkmasten, Denkmäler) sind <strong>Daten-Spender</strong>: Tippe auf sie und führe alle 2 Minuten einen <strong>⚡ DATA-HACK (+15 💎)</strong> durch!</p>
+        </div>
+
+        <!-- 4. DROHNEN -->
+        <div class="guide-card">
+          <div class="guide-card-header">
+            <span class="guide-icon">🛸</span>
+            <strong>4. Drohnen & Tactical Link</strong>
+          </div>
+          <p>Entfernte Gebäude kannst du nicht einfach kaufen. Schicke stattdessen für <strong>30 XP</strong> eine <strong>Drohne</strong> los. Die Drohne fliegt hin und kreist <strong>90 Sekunden im Orbit</strong>. Solange sie dort patrouilliert, ist der <strong>Tactical Link</strong> aktiv und du kannst das Gebäude aus der Ferne kaufen, aufrüsten oder hacken!</p>
+        </div>
+
+        <!-- 5. HQ & MESH -->
+        <div class="guide-card">
+          <div class="guide-card-header">
+            <span class="guide-icon">🌐</span>
+            <strong>5. HQ-Stützpunkt & Laser-Mesh</strong>
+          </div>
+          <p>Dein <strong>HQ</strong> ist deine Operations-Basis (tippe auf 💎 Energy Bits im Header):</p>
+          <ul>
+            <li><strong>🏗️ Data-Silos:</strong> Erweitere deine Bit-Kapazität (250 ➔ 500 ➔ 1.000 ➔ 2.500 💎).</li>
+            <li><strong>🛸 Hangar & 📡 Relais:</strong> Mehr Drohnen und größere Funkreichweite.</li>
+            <li><strong>🌐 Laser-Netzwerk:</strong> Verbindet deine Gebäude mit dem HQ. Bilden 3 Gebäude ein Dreieck, entsteht ein <strong>Sektor-Kontrollfeld</strong> mit automatischem Bit-Pipeline-Transfer ins HQ!</li>
+          </ul>
+        </div>
+
+        <!-- 6. STREET ART & AR -->
+        <div class="guide-card">
+          <div class="guide-card-header">
+            <span class="guide-icon">🎨</span>
+            <strong>6. Street-Art & Augmented Reality (AR)</strong>
+          </div>
+          <p>Öffne an besetzten Waben oder Gebäuden den <strong>Graffiti-Sprayer</strong> und verewige dein Tag. Andere Spieler können dein Kunstwerk vor Ort live durch ihre Smartphone-Kamera in <strong>Augmented Reality (AR)</strong> an der Wand schweben sehen!</p>
+        </div>
+      </div>
     </div>
   </div>
 
