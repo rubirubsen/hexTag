@@ -196,12 +196,30 @@
             <img id="profileAvatar" src="" alt="Avatar" class="profile-avatar" />
             <div class="profile-details">
               <strong id="profileUsername">Spielername</strong>
-              <span id="profileProvider" class="provider-badge">SSO</span>
+              <div class="profile-badges-row">
+                <span id="profileProvider" class="provider-badge">SSO</span>
+                <span id="profileHexCountMini" class="territory-mini-badge">⬡ 0 Waben</span>
+              </div>
               <span id="profileXp" class="profile-xp">0 XP</span>
             </div>
           </div>
 
-          <div id="ssoLinkSection" style="margin-top: 16px; display: none;">
+          <!-- TERRITORY / BESETZTE WABEN -->
+          <div class="profile-territory-section">
+            <div class="territory-header">
+              <div class="territory-title">
+                <span class="territory-icon">⬢</span>
+                <span>DEIN TERRITORIUM</span>
+              </div>
+              <span id="profileHexCountBadge" class="profile-count-pill">0 WABEN</span>
+            </div>
+            
+            <div id="profileHexList" class="profile-hex-list">
+              <!-- Dynamisch befuellt per JS -->
+            </div>
+          </div>
+
+          <div id="ssoLinkSection" style="margin-top: 12px; display: none;">
             <p class="auth-desc" style="margin-bottom: 8px; font-size: 11px;">🛡️ Gast-Konto mit SSO verknüpfen (behält XP & Waben):</p>
             <div class="sso-buttons">
               <a href="/api/auth/google" class="sso-btn sso-google"><span>🌐 Google verknüpfen</span></a>
@@ -210,7 +228,7 @@
             </div>
           </div>
 
-          <button class="action-btn" id="btnLogout" style="margin-top: 14px; width: 100%; border-color: #ff0055; color: #ff0055;">ABMELDEN</button>
+          <button class="action-btn" id="btnLogout" style="margin-top: 12px; width: 100%; border-color: #ff0055; color: #ff0055;">ABMELDEN</button>
         </div>
       </div>
     </div>

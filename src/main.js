@@ -83,6 +83,9 @@ const guestUsernameInput = document.getElementById('guestUsernameInput');
 const guestPasswordInput = document.getElementById('guestPasswordInput');
 const guestLoginError = document.getElementById('guestLoginError');
 const ssoLinkSection = document.getElementById('ssoLinkSection');
+const profileHexCountMini = document.getElementById('profileHexCountMini');
+const profileHexCountBadge = document.getElementById('profileHexCountBadge');
+const profileHexList = document.getElementById('profileHexList');
 const btnLogout = document.getElementById('btnLogout');
 
 totalXpDisplay.textContent = totalXp;
@@ -126,6 +129,93 @@ async function syncProfileToServer(updates = {}) {
   } catch (e) {
     console.log('[Auth] Profile-Sync offline/gepuffert:', e);
   }
+}
+
+function formatTimeAgo(timestamp) {
+  if (!timestamp) return 'Unbekannt';
+  const diffSec = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+  if (diffSec < 60) return 'Gerade eben';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `Vor ${diffMin} Min.`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `Vor ${diffHours} Std.`;
+  return new Date(timestamp).toLocaleDateString([], { day: '2-digit', month: '2-digit' });
+}
+
+function renderProfileTerritory() {
+  if (!profileHexList) return;
+
+  const currentName = currentUser?.username || localStorage.getItem(SAVED_GUEST_NAME_KEY) || 'TAGGER_01';
+  const myHexes = [];
+
+  for (const [hexId, zone] of capturedHexes.entries()) {
+    const isOwner = (zone.owner && zone.owner.toLowerCase() === currentName.toLowerCase()) ||
+                    (currentUser && zone.owner_id === currentUser.id);
+    if (isOwner) {
+      myHexes.push({
+        hexId,
+        color: zone.color || userColor,
+        capturedAt: zone.capturedAt || zone.captured_at,
+        owner: zone.owner || zone.owner_name
+      });
+    }
+  }
+
+  const countText = `${myHexes.length} ${myHexes.length === 1 ? 'Wabe' : 'Waben'}`;
+  if (profileHexCountMini) profileHexCountMini.textContent = `⬡ ${countText}`;
+  if (profileHexCountBadge) profileHexCountBadge.textContent = countText.toUpperCase();
+
+  profileHexList.innerHTML = '';
+
+  if (myHexes.length === 0) {
+    profileHexList.innerHTML = `
+      <div class="empty-territory-msg">
+        <span class="empty-territory-icon">⬡</span>
+        <strong class="empty-territory-title">Keine besetzten Waben</strong>
+        <p class="empty-territory-sub">Bewege dich zu einer freien Wabe und halte sie 3 Minuten, um dein Revier zu markieren!</p>
+      </div>
+    `;
+    return;
+  }
+
+  // Neueste Eroberungen zuerst
+  myHexes.sort((a, b) => (b.capturedAt || 0) - (a.capturedAt || 0));
+
+  myHexes.forEach(hex => {
+    const tagCount = tagStore.getTagCountForHex(hex.hexId);
+    const shortCode = hex.hexId.slice(-6).toUpperCase();
+    const timeAgo = formatTimeAgo(hex.capturedAt);
+
+    const item = document.createElement('div');
+    item.className = 'profile-hex-item';
+    item.innerHTML = `
+      <div class="profile-hex-left">
+        <span class="profile-hex-icon" style="color: ${hex.color}; text-shadow: 0 0 10px ${hex.color}">⬢</span>
+        <div class="profile-hex-info">
+          <strong class="profile-hex-title">WABE #${shortCode}</strong>
+          <span class="profile-hex-meta">⏱️ ${timeAgo} • 🎨 ${tagCount} Tag${tagCount === 1 ? '' : 's'}</span>
+        </div>
+      </div>
+      <button class="profile-hex-jump-btn" title="Auf Karte anspringen">ZENTRIEREN ❯</button>
+    `;
+
+    item.addEventListener('click', () => {
+      try {
+        const [lat, lng] = h3.cellToLatLng(hex.hexId);
+        isFollowingUser = false;
+        const btn = document.getElementById('btnCenterMap');
+        if (btn) btn.classList.add('needs-center');
+
+        map.flyTo({ center: [lng, lat], zoom: 18, pitch: 45, speed: 1.6 });
+        authModal.classList.remove('active');
+        showToast(`📍 WABE #${shortCode} AUF DER KARTE ZENTRIERT`);
+      } catch (err) {
+        console.error('[hexTag] Error flying to hex:', err);
+      }
+    });
+
+    profileHexList.appendChild(item);
+  });
 }
 
 async function checkAuthStatus() {
@@ -175,6 +265,8 @@ function setLoggedInUser(user) {
     ssoLinkSection.style.display = user.sso_provider === 'guest' ? 'block' : 'none';
   }
 
+  renderProfileTerritory();
+
   document.documentElement.style.setProperty('--user-color', userColor);
   userColorDot.style.background = userColor;
   userColorDot.style.boxShadow = `0 0 12px ${userColor}`;
@@ -194,6 +286,7 @@ function setLoggedOut() {
 
 btnOpenAuthModal.addEventListener('click', () => {
   if (guestLoginError) guestLoginError.style.display = 'none';
+  renderProfileTerritory();
   authModal.classList.add('active');
 });
 
@@ -388,6 +481,7 @@ async function fetchServerZones() {
         });
       });
       updateHexGrid(userLocation.lat, userLocation.lng);
+      renderProfileTerritory();
     }
   } catch (e) {
     console.log('[hexTag] Server-Zonen Offline:', e);
@@ -616,6 +710,7 @@ async function completeCapture(hexId) {
 
   addXP(50, '🎉 WABE EROBERT!');
   updateHexGrid(userLocation.lat, userLocation.lng);
+  renderProfileTerritory();
 }
 
 // --- 8. DESKTOP HQ & DROHNEN LOGIK ---
