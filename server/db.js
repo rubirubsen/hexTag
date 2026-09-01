@@ -18,8 +18,8 @@ const config = {
 
 import { runMigration } from './migrate.js';
 
-let pool = null;
-let isConnected = false;
+let dbPool = null;
+let dbConnected = false;
 
 export async function initDatabase() {
   if (!process.env.DB_PASSWORD && !process.env.DB_SERVER) {
@@ -32,20 +32,20 @@ export async function initDatabase() {
     await runMigration();
 
     // 2. Globalen Connection Pool fuer den laufenden Server oeffnen
-    pool = await sql.connect(config);
-    isConnected = true;
+    dbPool = await sql.connect(config);
+    dbConnected = true;
     console.log(`[Database] Erfolgreich mit Microsoft SQL Server verbunden: ${config.server}:${config.port}/${config.database}`);
     return true;
   } catch (err) {
     console.warn(`[Database] Verbindung zu MSSQL (${config.server}) fehlgeschlagen:`, err.message);
     console.log('[Database] Wechsle in In-Memory / Offline Modus.');
-    isConnected = false;
+    dbConnected = false;
     return false;
   }
 }
 
 async function createTables() {
-  if (!pool) return;
+  if (!dbPool) return;
 
   const createQuery = `
     -- Users Table
@@ -105,7 +105,7 @@ async function createTables() {
   `;
 
   try {
-    await pool.request().query(createQuery);
+    await dbPool.request().query(createQuery);
     console.log('[Database] MSSQL Tabellen (Users, HexZones, GraffitiTags, PlayerHQs) verifiziert / angelegt.');
   } catch (err) {
     console.error('[Database] Fehler beim Anlegen der Tabellen:', err.message);
@@ -113,9 +113,9 @@ async function createTables() {
 }
 
 export function getPool() {
-  return pool;
+  return dbPool;
 }
 
 export function isDbConnected() {
-  return isConnected;
+  return dbConnected;
 }
