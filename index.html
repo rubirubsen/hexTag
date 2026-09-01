@@ -33,7 +33,7 @@
     </div>
   </header>
 
-  <!-- Hex Capture Progress Card (Active when in Hex) -->
+  <!-- Hex Capture Progress Card -->
   <div class="capture-overlay" id="captureCard">
     <div class="capture-header">
       <div class="hex-badge">
@@ -51,15 +51,28 @@
 
     <div class="capture-footer">
       <span id="captureStatusText">Bleibe 3:00 Min in der Wabe</span>
-      <span class="xp-rate" id="incomeRateText">+10 XP / Min</span>
+      <div class="tag-counter-badge" id="btnOpenHexGallery">
+        <span id="hexTagCount">🎨 0 Tags</span>
+      </div>
     </div>
   </div>
+
+  <!-- Spray Tag Action Button (Floating) -->
+  <button class="fab-spray-btn" id="btnOpenSprayModal" title="Graffiti in dieser Wabe sprayen">
+    <span class="spray-icon">🎨</span>
+    <span class="spray-text">TAG SPRAYEN</span>
+  </button>
 
   <!-- Bottom Floating Action Bar -->
   <nav class="hud-bottom-bar">
     <button class="hud-btn" id="btnCenterMap" title="Zentrieren auf GPS">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>
-      <span>LOKALISIEREN</span>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>
+      <span>GPS</span>
+    </button>
+
+    <button class="hud-btn ar-btn" id="btnToggleAR" title="AR Kamera-Blick">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      <span>AR-BLICK</span>
     </button>
 
     <div class="color-picker-group">
@@ -71,12 +84,78 @@
     </div>
 
     <button class="hud-btn test-btn" id="btnSimulateMove" title="Klicke auf die Karte zum Bewegen">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
-      <span>TEST-MOVE</span>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+      <span>MOVE</span>
     </button>
   </nav>
 
-  <!-- Notification Toast -->
+  <!-- SPRAY PAINT MODAL (FreeDraw Canvas) -->
+  <div class="modal-backdrop" id="sprayModal">
+    <div class="spray-panel">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span>GRAFFITI SPRAYER</span>
+          <small id="sprayModalHexLabel">WABE: HEX_000</small>
+        </div>
+        <button class="close-modal-btn" id="btnCloseSprayModal">✕</button>
+      </div>
+
+      <div class="canvas-wrapper">
+        <canvas id="sprayCanvas"></canvas>
+      </div>
+
+      <!-- Spray Tools & Brushes -->
+      <div class="spray-controls">
+        <div class="brush-modes">
+          <button class="tool-btn active" data-mode="spray" id="toolSpray">SPRAY</button>
+          <button class="tool-btn" data-mode="neon" id="toolNeon">NEON GLOW</button>
+          <button class="tool-btn" data-mode="brush" id="toolSolid">MARKER</button>
+        </div>
+
+        <div class="brush-size-row">
+          <span>STÄRKE</span>
+          <input type="range" id="brushSizeSlider" min="4" max="28" value="10" />
+        </div>
+
+        <div class="spray-actions">
+          <button class="action-btn" id="btnUndoCanvas">↶ UNDO</button>
+          <button class="action-btn" id="btnClearCanvas">🗑 LÖSCHEN</button>
+          <button class="action-btn primary-spray-btn" id="btnSubmitSpray">SPRAYEN! (+20 XP)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HEX TAG GALLERY MODAL -->
+  <div class="modal-backdrop" id="galleryModal">
+    <div class="spray-panel gallery-panel">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span>WAFEN-TAGS & GRAFFITIS</span>
+          <small id="galleryHexLabel">HEX: ...</small>
+        </div>
+        <button class="close-modal-btn" id="btnCloseGalleryModal">✕</button>
+      </div>
+
+      <div class="gallery-grid" id="galleryGrid">
+        <!-- Dynamische Tags werden hier gerendert -->
+      </div>
+    </div>
+  </div>
+
+  <!-- FULLSCREEN AR CAMERA VIEWER -->
+  <div class="ar-viewer-container" id="arContainer">
+    <video class="ar-video-feed" id="arVideo" playsinline autoplay muted></video>
+    <div class="ar-hud-overlay">
+      <div class="ar-header">
+        <span class="ar-badge">AR SPRAY-VISION</span>
+        <button class="ar-close-btn" id="btnCloseAR">KARTE ✕</button>
+      </div>
+      <div class="ar-tags-layer"></div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
   <div class="toast-banner" id="toast">WABE ERFOLGREICH EROBERT!</div>
 
   <script type="module" src="./src/main.js"></script>

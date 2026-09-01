@@ -1,10 +1,14 @@
 import maplibregl from 'maplibre-gl';
 import * as h3 from 'h3-js';
+import { GraffitiCanvas } from './graffitiCanvas.js';
+import { tagStore } from './tagStore.js';
+import { ARViewer } from './arViewer.js';
 
 // --- GAME CONFIGURATION ---
-const H3_RESOLUTION = 10; // ~40m Kantenlaenge, optimal fuer Bushaltestellen
+const H3_RESOLUTION = 10; // ~40m Kantenlaenge
 const CAPTURE_TIME_SECONDS = 180; // 3 Minuten Regelzeit
 const PASSIVE_XP_PER_MINUTE = 10;
+const SPRAY_XP_REWARD = 20;
 
 // State
 let userColor = '#ff0055';
@@ -22,12 +26,36 @@ const timerDisplay = document.getElementById('timerDisplay');
 const progressFillBar = document.getElementById('progressFillBar');
 const currentHexLabel = document.getElementById('currentHexLabel');
 const captureStatusText = document.getElementById('captureStatusText');
+const hexTagCount = document.getElementById('hexTagCount');
 const totalXpDisplay = document.getElementById('totalXpDisplay');
 const gpsStatus = document.getElementById('gpsStatus');
 const toast = document.getElementById('toast');
 const userColorDot = document.getElementById('userColorDot');
 
-// --- 1. INITIALIZE MAP (Dark Theme) ---
+// Modals & Panels
+const sprayModal = document.getElementById('sprayModal');
+const sprayModalHexLabel = document.getElementById('sprayModalHexLabel');
+const galleryModal = document.getElementById('galleryModal');
+const galleryHexLabel = document.getElementById('galleryHexLabel');
+const galleryGrid = document.getElementById('galleryGrid');
+
+// --- 1. INITIALIZE CANVAS & AR VIEWER ---
+const sprayCanvasEl = document.getElementById('sprayCanvas');
+let graffitiCanvas = null;
+
+// Initialisiere Canvas nach erstem Rendern
+setTimeout(() => {
+  graffitiCanvas = new GraffitiCanvas(sprayCanvasEl);
+  graffitiCanvas.setBrushColor(userColor);
+}, 100);
+
+const arContainer = document.getElementById('arContainer');
+const arVideo = document.getElementById('arVideo');
+const arViewer = new ARViewer(arVideo, arContainer, () => {
+  console.log('[hexTag] AR-Blick beendet.');
+});
+
+// --- 2. INITIALIZE MAP (Dark Theme) ---
 const map = new maplibregl.Map({
   container: 'map',
   style: {
@@ -67,7 +95,7 @@ const playerMarker = new maplibregl.Marker({ element: markerEl })
   .setLngLat([userLocation.lng, userLocation.lat])
   .addTo(map);
 
-// --- 2. MAP LOAD & HEX LAYERS ---
+// --- 3. MAP LOAD & HEX LAYERS ---
 map.on('load', () => {
   console.log('[hexTag] Karte geladen. Initialisiere H3-Waben-Layer...');
 
@@ -77,7 +105,7 @@ map.on('load', () => {
     data: { type: 'FeatureCollection', features: [] }
   });
 
-  // 1. Hex Fill Layer (Gefuellte Farben & Eroberungs-Status)
+  // 1. Hex Fill Layer
   map.addLayer({
     id: 'hex-fill',
     type: 'fill',
@@ -88,7 +116,7 @@ map.on('load', () => {
     }
   });
 
-  // 2. Hex Outer Borders (Cyber Glow Outline)
+  // 2. Hex Outer Borders
   map.addLayer({
     id: 'hex-borders',
     type: 'line',
@@ -96,7 +124,7 @@ map.on('load', () => {
     paint: {
       'line-color': ['get', 'strokeColor'],
       'line-width': ['get', 'strokeWidth'],
-      'line-opacity': 0.85
+      'line-opacity': 0.9
     }
   });
 
@@ -105,19 +133,19 @@ map.on('load', () => {
   startGeolocation();
 });
 
-// --- 3. H3 GRID & GEOJSON GENERATION ---
+// --- 4. H3 GRID & GEOJSON GENERATION ---
 function updateHexGrid(lat, lng) {
   try {
     const centerHex = h3.latLngToCell(lat, lng, H3_RESOLUTION);
-    const nearbyHexes = h3.gridDisk(centerHex, 3); // 3 Ringe um den Spieler
+    const nearbyHexes = h3.gridDisk(centerHex, 3);
 
     const features = nearbyHexes.map(hex => {
-      // Koordinaten der 6 Waben-Ecken abrufen [lat, lng] -> [lng, lat] fuer GeoJSON
       const boundary = h3.cellToBoundary(hex).map(([bLat, bLng]) => [bLng, bLat]);
-      boundary.push(boundary[0]); // Polygon schliessen
+      boundary.push(boundary[0]);
 
       const isCurrent = hex === currentHexId;
       const captured = capturedHexes.get(hex);
+      const tagCount = tagStore.getTagCountForHex(hex);
 
       let fillColor = '#000000';
       let fillOpacity = 0.05;
@@ -131,6 +159,10 @@ function updateHexGrid(lat, lng) {
         strokeWidth = 2.5;
       }
 
+      if (tagCount > 0) {
+        strokeColor = '#ffe600'; // Gelb leuchtender Rand bei vorhandenen Tags
+      }
+
       if (isCurrent) {
         const progress = Math.min(captureSeconds / CAPTURE_TIME_SECONDS, 1.0);
         strokeColor = userColor;
@@ -138,7 +170,7 @@ function updateHexGrid(lat, lng) {
 
         if (!captured) {
           fillColor = userColor;
-          fillOpacity = 0.15 + progress * 0.45; // Dynamischer Fuell-Effekt waehrend Eroberung
+          fillOpacity = 0.15 + progress * 0.45;
         }
       }
 
@@ -149,7 +181,8 @@ function updateHexGrid(lat, lng) {
           fillColor,
           fillOpacity,
           strokeColor,
-          strokeWidth
+          strokeWidth,
+          tagCount
         },
         geometry: {
           type: 'Polygon',
@@ -163,31 +196,31 @@ function updateHexGrid(lat, lng) {
       source.setData({ type: 'FeatureCollection', features });
     }
   } catch (err) {
-    console.error('[hexTag] Fehler beim Aktualisieren der Waben:', err);
+    console.error('[hexTag] Fehler beim Grid-Update:', err);
   }
 }
 
-// --- 4. GPS & STANDORTVERARBEITUNG ---
+// --- 5. GPS & STANDORT ---
 function startGeolocation() {
   if (!navigator.geolocation) {
-    gpsStatus.textContent = 'GPS: NICHT UNTERSTÜTZT (SIMULATION)';
+    gpsStatus.textContent = 'GPS: SIMULATION AKTIV';
     return;
   }
 
   navigator.geolocation.watchPosition(
     (pos) => {
-      if (isSimulating) return; // Simulation nicht ueberschreiben
+      if (isSimulating) return;
 
       const { latitude, longitude, accuracy } = pos.coords;
       userLocation = { lat: latitude, lng: longitude };
 
       playerMarker.setLngLat([longitude, latitude]);
-      gpsStatus.textContent = `GPS: ±${Math.round(accuracy)}m GENAU`;
+      gpsStatus.textContent = `GPS: ±${Math.round(accuracy)}m`;
 
       handlePositionChange(latitude, longitude);
     },
     (err) => {
-      console.warn('[hexTag] GPS-Fehler oder blockiert:', err.message);
+      console.warn('[hexTag] GPS-Fallback:', err.message);
       gpsStatus.textContent = 'GPS: SIMULATION AKTIV';
       handlePositionChange(userLocation.lat, userLocation.lng);
     },
@@ -202,40 +235,40 @@ function handlePositionChange(lat, lng) {
     currentHexId = newHex;
     currentHexLabel.textContent = `HEX: ${newHex.slice(-6).toUpperCase()}`;
 
-    // Reset Capture Timer beim Wabenwechsel
+    // Update Tag Counter auf dem HUD
+    updateHudTagCount(newHex);
+
     captureSeconds = 0;
     showToast(`ZONE BETRETEN: ${newHex.slice(-6).toUpperCase()}`);
-    console.log(`[hexTag] Wabe betreten: ${newHex}`);
   }
 
   updateHexGrid(lat, lng);
 }
 
-// --- 5. CAPTURE & PASSIVE TICK LOOP (Jede Sekunde) ---
+function updateHudTagCount(hexId) {
+  const count = tagStore.getTagCountForHex(hexId);
+  hexTagCount.textContent = `🎨 ${count} Tag${count === 1 ? '' : 's'}`;
+}
+
+// --- 6. CAPTURE & TICK LOOP ---
 setInterval(() => {
   if (!currentHexId) return;
 
   const captured = capturedHexes.get(currentHexId);
 
-  // Fall A: Wabe gehoert dem Spieler bereits -> Passives Einkommen generieren
   if (captured && captured.color === userColor) {
-    timerDisplay.textContent = 'EROIL';
-    timerDisplay.style.color = '#39ff14';
-    timerDisplay.textContent = 'EROIL';
     timerDisplay.textContent = 'GEHALTEN';
+    timerDisplay.style.color = '#39ff14';
     progressFillBar.style.width = '100%';
-    captureStatusText.textContent = 'Wabe in deinem Besitz! Du erhaeltst XP.';
+    captureStatusText.textContent = 'Wabe in deinem Besitz (+10 XP/Min)';
 
-    // Minutentakt fuer XP (+10 XP alle 60 Sek)
     captureSeconds++;
     if (captureSeconds % 60 === 0) {
       totalXp += PASSIVE_XP_PER_MINUTE;
       totalXpDisplay.textContent = totalXp;
       showToast(`+${PASSIVE_XP_PER_MINUTE} XP ERHALTEN!`);
     }
-  } 
-  // Fall B: Wabe wird aktiv erobert
-  else {
+  } else {
     captureSeconds++;
     const progress = Math.min(captureSeconds / CAPTURE_TIME_SECONDS, 1.0);
     const remaining = Math.max(0, CAPTURE_TIME_SECONDS - captureSeconds);
@@ -245,12 +278,10 @@ setInterval(() => {
     timerDisplay.textContent = `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
     timerDisplay.style.color = 'var(--accent-cyan)';
     progressFillBar.style.width = `${(progress * 100).toFixed(1)}%`;
-    captureStatusText.textContent = `Eroberung laeuft... (${(progress * 100).toFixed(0)}%)`;
+    captureStatusText.textContent = `Eroberung: ${(progress * 100).toFixed(0)}%`;
 
-    // Visuelles Update der Waben-Fuellung
     updateHexGrid(userLocation.lat, userLocation.lng);
 
-    // 100% erreicht -> Wabe erobern!
     if (captureSeconds >= CAPTURE_TIME_SECONDS) {
       completeCapture(currentHexId);
     }
@@ -264,23 +295,135 @@ function completeCapture(hexId) {
     capturedAt: Date.now()
   });
 
-  totalXp += 50; // Einmaliger Eroberungs-Bonus
+  totalXp += 50;
   totalXpDisplay.textContent = totalXp;
 
-  showToast(`🎉 WABE ${hexId.slice(-6).toUpperCase()} EROBERT! (+50 XP)`);
+  showToast(`🎉 WABE EROBERT! (+50 XP)`);
   updateHexGrid(userLocation.lat, userLocation.lng);
 }
 
-// --- 6. UI INTERAKTIONEN & TEST-BUTTONS ---
+// --- 7. SPRAY MODAL & GRAFFITI ENGINE ---
+const btnOpenSprayModal = document.getElementById('btnOpenSprayModal');
+const btnCloseSprayModal = document.getElementById('btnCloseSprayModal');
+const btnSubmitSpray = document.getElementById('btnSubmitSpray');
+const btnUndoCanvas = document.getElementById('btnUndoCanvas');
+const btnClearCanvas = document.getElementById('btnClearCanvas');
+const brushSizeSlider = document.getElementById('brushSizeSlider');
+
+btnOpenSprayModal.addEventListener('click', () => {
+  if (!currentHexId) return;
+  sprayModalHexLabel.textContent = `WABE: ${currentHexId.slice(-6).toUpperCase()}`;
+  sprayModal.classList.add('active');
+  if (graffitiCanvas) {
+    graffitiCanvas.initCanvasSize();
+    graffitiCanvas.setBrushColor(userColor);
+  }
+});
+
+btnCloseSprayModal.addEventListener('click', () => {
+  sprayModal.classList.remove('active');
+});
+
+// Brush Modes
+document.querySelectorAll('.tool-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (graffitiCanvas) graffitiCanvas.setBrushMode(btn.dataset.mode);
+  });
+});
+
+brushSizeSlider.addEventListener('input', (e) => {
+  if (graffitiCanvas) graffitiCanvas.setBrushSize(e.target.value);
+});
+
+btnUndoCanvas.addEventListener('click', () => graffitiCanvas && graffitiCanvas.undo());
+btnClearCanvas.addEventListener('click', () => graffitiCanvas && graffitiCanvas.clear());
+
+// Graffiti Einreichen
+btnSubmitSpray.addEventListener('click', () => {
+  if (!graffitiCanvas || !currentHexId) return;
+
+  const imageBase64 = graffitiCanvas.exportDataURL();
+  tagStore.addTag({
+    hexId: currentHexId,
+    lat: userLocation.lat,
+    lng: userLocation.lng,
+    author: 'TAGGER_01',
+    color: userColor,
+    imageBase64
+  });
+
+  totalXp += SPRAY_XP_REWARD;
+  totalXpDisplay.textContent = totalXp;
+
+  showToast(`🎨 TAG ERFOLGREICH GESPRÜHT! (+${SPRAY_XP_REWARD} XP)`);
+  sprayModal.classList.remove('active');
+  updateHudTagCount(currentHexId);
+  updateHexGrid(userLocation.lat, userLocation.lng);
+});
+
+// --- 8. HEX TAG GALLERY MODAL ---
+const btnOpenHexGallery = document.getElementById('btnOpenHexGallery');
+const btnCloseGalleryModal = document.getElementById('btnCloseGalleryModal');
+
+btnOpenHexGallery.addEventListener('click', () => {
+  if (!currentHexId) return;
+  openGalleryForHex(currentHexId);
+});
+
+btnCloseGalleryModal.addEventListener('click', () => {
+  galleryModal.classList.remove('active');
+});
+
+function openGalleryForHex(hexId) {
+  galleryHexLabel.textContent = `WABE: ${hexId.slice(-6).toUpperCase()}`;
+  const tags = tagStore.getTagsForHex(hexId);
+
+  galleryGrid.innerHTML = '';
+  if (tags.length === 0) {
+    galleryGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-dim); padding: 30px 0;">Noch keine Tags in dieser Wabe.<br>Sei der Erste und spraye ein Graffiti!</div>';
+  } else {
+    tags.forEach(t => {
+      const card = document.createElement('div');
+      card.className = 'gallery-card';
+      card.innerHTML = `
+        <img src="${t.imageBase64}" alt="Tag" />
+        <div class="gallery-card-meta">
+          <span style="color: ${t.color}; font-weight: bold;">${t.author}</span>
+          <span>${new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+        </div>
+      `;
+      galleryGrid.appendChild(card);
+    });
+  }
+
+  galleryModal.classList.add('active');
+}
+
+// --- 9. AR CAMERA VIEWER ---
+const btnToggleAR = document.getElementById('btnToggleAR');
+const btnCloseAR = document.getElementById('btnCloseAR');
+
+btnToggleAR.addEventListener('click', () => {
+  if (!currentHexId) return;
+  const currentTags = tagStore.getTagsForHex(currentHexId);
+  arViewer.start(currentTags);
+});
+
+btnCloseAR.addEventListener('click', () => {
+  arViewer.stop();
+});
+
+// --- 10. UI HELPERS & COLOR PICKER ---
 function showToast(msg) {
   toast.textContent = msg;
   toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), 3200);
+  setTimeout(() => toast.classList.remove('show'), 3000);
 }
 
-// Farbwechsel
 document.querySelectorAll('.color-btn').forEach(btn => {
-  btn.addEventListener('click', (e) => {
+  btn.addEventListener('click', () => {
     document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     userColor = btn.dataset.color;
@@ -288,23 +431,20 @@ document.querySelectorAll('.color-btn').forEach(btn => {
     userColorDot.style.background = userColor;
     userColorDot.style.boxShadow = `0 0 12px ${userColor}`;
 
+    if (graffitiCanvas) graffitiCanvas.setBrushColor(userColor);
     updateHexGrid(userLocation.lat, userLocation.lng);
-    showToast(`Farbe gewechselt auf ${btn.title}`);
+    showToast(`Farbe: ${btn.title}`);
   });
 });
 
-// GPS Zentrieren
 document.getElementById('btnCenterMap').addEventListener('click', () => {
   map.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 17, speed: 1.5 });
 });
 
-// Test-Move Simulation (Klick auf Karte oder Test-Button)
 document.getElementById('btnSimulateMove').addEventListener('click', () => {
   isSimulating = true;
-  // Bewege Spieler zufaellig ca 60 Meter in eine Richtung
   const dLat = (Math.random() - 0.5) * 0.0008;
   const dLng = (Math.random() - 0.5) * 0.0008;
-
   userLocation.lat += dLat;
   userLocation.lng += dLng;
 
@@ -313,12 +453,10 @@ document.getElementById('btnSimulateMove').addEventListener('click', () => {
   handlePositionChange(userLocation.lat, userLocation.lng);
 });
 
-// Klick auf die Karte bewegt Spieler im Testmodus sofort
 map.on('click', (e) => {
   isSimulating = true;
   userLocation.lat = e.lngLat.lat;
   userLocation.lng = e.lngLat.lng;
-
   playerMarker.setLngLat([userLocation.lng, userLocation.lat]);
   handlePositionChange(userLocation.lat, userLocation.lng);
 });
