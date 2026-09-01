@@ -1038,7 +1038,69 @@ map.on('click', (e) => {
   }
 });
 
-// --- 9. SPRAY MODAL & GRAFFITI ---
+// --- 9. SPRAY MODAL & AR LIVE SPRAYER ---
+const sprayCameraVideo = document.getElementById('sprayCameraVideo');
+const sprayArCrosshair = document.getElementById('sprayArCrosshair');
+const btnToggleSprayAR = document.getElementById('btnToggleSprayAR');
+let sprayCameraStream = null;
+let isSprayArActive = false;
+
+async function startSprayArCamera() {
+  try {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      sprayCameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
+      });
+      if (sprayCameraVideo) {
+        sprayCameraVideo.srcObject = sprayCameraStream;
+        sprayCameraVideo.style.display = 'block';
+        await sprayCameraVideo.play();
+      }
+      if (sprayArCrosshair) sprayArCrosshair.style.display = 'block';
+      isSprayArActive = true;
+      if (btnToggleSprayAR) {
+        btnToggleSprayAR.textContent = '📷 AR: LIVE (WAND)';
+        btnToggleSprayAR.classList.add('ar-active');
+      }
+      showToast('📷 AR Live-Wand aktiv: Ziele auf eine echte Wand!');
+    }
+  } catch (err) {
+    console.warn('[Sprayer] AR Camera error:', err);
+    showToast('⚠️ Kamera-Zugriff nicht verfügbar oder abgelehnt.');
+    stopSprayArCamera();
+  }
+}
+
+function stopSprayArCamera() {
+  if (sprayCameraStream) {
+    sprayCameraStream.getTracks().forEach(track => track.stop());
+    sprayCameraStream = null;
+  }
+  if (sprayCameraVideo) {
+    sprayCameraVideo.style.display = 'none';
+    sprayCameraVideo.srcObject = null;
+  }
+  if (sprayArCrosshair) sprayArCrosshair.style.display = 'none';
+  isSprayArActive = false;
+  if (btnToggleSprayAR) {
+    btnToggleSprayAR.textContent = '📷 AR: AUS';
+    btnToggleSprayAR.classList.remove('ar-active');
+  }
+}
+
+if (btnToggleSprayAR) {
+  btnToggleSprayAR.addEventListener('click', (e) => {
+    e.stopPropagation();
+    soundEngine.playClick();
+    if (isSprayArActive) {
+      stopSprayArCamera();
+    } else {
+      startSprayArCamera();
+    }
+  });
+}
+
 btnOpenSprayModal.addEventListener('click', () => {
   if (!currentHexId) return;
   sprayModalHexLabel.textContent = `WABE: ${currentHexId.slice(-6).toUpperCase()}`;
@@ -1050,12 +1112,14 @@ btnOpenSprayModal.addEventListener('click', () => {
 });
 
 btnCloseSprayModal.addEventListener('click', () => {
+  stopSprayArCamera();
   sprayModal.classList.remove('active');
 });
 
 document.querySelectorAll('.tool-btn').forEach(btn => {
+  if (btn.id === 'btnToggleSprayAR') return;
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tool-btn:not(#btnToggleSprayAR)').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     if (graffitiCanvas) graffitiCanvas.setBrushMode(btn.dataset.mode);
   });
@@ -1072,7 +1136,7 @@ btnSubmitSpray.addEventListener('click', async () => {
   if (!graffitiCanvas || !currentHexId) return;
 
   const imageBase64 = graffitiCanvas.exportDataURL();
-  const authorName = currentUser ? currentUser.username : 'TAGGER_01';
+  const authorName = currentUser?.username || localStorage.getItem(SAVED_GUEST_NAME_KEY) || 'TAGGER_01';
 
   tagStore.addTag({
     hexId: currentHexId,
@@ -1107,6 +1171,7 @@ btnSubmitSpray.addEventListener('click', async () => {
     console.log('[hexTag] Offline Tag Sync:', e);
   }
 
+  stopSprayArCamera();
   addXP(SPRAY_XP_REWARD, '🎨 TAG GESPRÜHT!');
   sprayModal.classList.remove('active');
   updateHudTagCount(currentHexId);

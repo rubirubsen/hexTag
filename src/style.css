@@ -777,12 +777,9 @@ body.hud-hidden .hud-restore-floating-btn {
   color: var(--text-dim);
   font-size: 20px;
   cursor: pointer;
-  padding: 4px 8px;
-}
-
 .canvas-wrapper {
   width: 100%;
-  height: 280px;
+  height: 300px;
   background: #111622;
   background-image: 
     radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
@@ -790,12 +787,39 @@ body.hud-hidden .hud-restore-floating-btn {
   background-size: 16px 16px, 100% 100%;
   position: relative;
   touch-action: none;
+  overflow: hidden;
+}
+
+.spray-ar-camera-feed {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
 }
 
 #sprayCanvas {
+  position: relative;
   width: 100%;
   height: 100%;
   display: block;
+  z-index: 2;
+}
+
+.spray-ar-crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 48px;
+  height: 48px;
+  border: 1.5px dashed rgba(0, 240, 255, 0.5);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 3;
+  animation: pulse-glow 2s infinite ease-in-out;
 }
 
 .spray-controls {
@@ -822,12 +846,22 @@ body.hud-hidden .hud-restore-floating-btn {
   font-size: 10px;
   font-weight: 800;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .tool-btn.active {
   background: rgba(0, 240, 255, 0.2);
   border-color: var(--accent-cyan);
   color: var(--accent-cyan);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+}
+
+.ar-spray-toggle-btn.ar-active {
+  background: linear-gradient(135deg, rgba(57, 255, 20, 0.25), rgba(0, 240, 255, 0.25));
+  border-color: #39ff14;
+  color: #39ff14;
+  box-shadow: 0 0 14px rgba(57, 255, 20, 0.4);
+}
 }
 
 .brush-size-row {
