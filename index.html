@@ -278,8 +278,13 @@
           </div>
         </div>
 
+        <!-- BUY BUILDING BUTTON (if unowned) -->
+        <button class="action-btn primary-spray-btn" id="btnBuyBuilding" style="width: 100%; padding: 12px; font-size: 11px;">
+          🏢 DIESES GEBÄUDE KAUFEN (75 💎 BITS)
+        </button>
+
         <!-- UPGRADE MODULES (Data Bits Spending) -->
-        <div class="node-upgrades-section">
+        <div class="node-upgrades-section" id="nodeUpgradesSection">
           <div class="upgrade-card" id="btnUpgradeTurret">
             <div class="upgrade-icon">⚡</div>
             <div class="upgrade-info">
@@ -306,6 +311,16 @@
             </div>
             <button class="upgrade-action-btn" id="btnBeaconCost">60 💎</button>
           </div>
+        </div>
+
+        <!-- BUILDING ACTIONS -->
+        <div class="spray-actions" style="margin-top: 4px;">
+          <button class="action-btn" id="btnNodeSpray" style="flex: 1; border-color: var(--user-color); color: var(--user-color);">
+            🎨 AN DIESE WAND SPRAYEN
+          </button>
+          <button class="action-btn" id="btnNodeSendDrone" style="flex: 1; border-color: #00f0ff; color: #00f0ff;">
+            🛸 DROHNE SCHICKEN
+          </button>
         </div>
       </div>
     </div>

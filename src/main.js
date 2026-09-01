@@ -83,9 +83,13 @@ const nodeModalDistance = document.getElementById('nodeModalDistance');
 const nodeOwnerText = document.getElementById('nodeOwnerText');
 const nodeShieldText = document.getElementById('nodeShieldText');
 const nodeTurretLevel = document.getElementById('nodeTurretLevel');
+const btnBuyBuilding = document.getElementById('btnBuyBuilding');
+const nodeUpgradesSection = document.getElementById('nodeUpgradesSection');
 const btnUpgradeTurret = document.getElementById('btnUpgradeTurret');
 const btnUpgradeShield = document.getElementById('btnUpgradeShield');
 const btnUpgradeBeacon = document.getElementById('btnUpgradeBeacon');
+const btnNodeSpray = document.getElementById('btnNodeSpray');
+const btnNodeSendDrone = document.getElementById('btnNodeSendDrone');
 
 // Auth Modal
 const authModal = document.getElementById('authModal');
@@ -1058,29 +1062,81 @@ function showToast(msg) {
 }
 
 // --- 12. POI NODE CONTROL & TOWER DEFENSE ---
+map.on('click', async (e) => {
+  if (isTargetingDrone) return;
+
+  const { lng, lat } = e.lngLat;
+  showToast('🔍 Scanne Gebäude & Adresse...');
+
+  try {
+    const pointData = await poiManager.resolvePoint(lat, lng);
+    openNodeControlModal(pointData);
+  } catch (err) {
+    console.error('[PoiManager] Click resolve error:', err);
+  }
+});
+
 function openNodeControlModal(poi, fort) {
   activeSelectedPoi = poi;
   const currentFort = poiManager ? poiManager.getFortification(poi.id) : (fort || {});
-  const isHexOwned = capturedHexes.has(poi.hexId);
-  const zone = capturedHexes.get(poi.hexId);
-  const ownerName = zone ? zone.owner : 'NIEMAND';
+  const isOwned = currentFort.isOwned || false;
+  const currentName = currentUser?.username || localStorage.getItem(SAVED_GUEST_NAME_KEY) || 'TAGGER_01';
+  const isMine = isOwned && currentFort.owner && currentFort.owner.toLowerCase() === currentName.toLowerCase();
   const dist = poiManager ? poiManager.getDistanceMeters(userLocation.lat, userLocation.lng, poi.lat, poi.lng) : 0;
 
-  if (nodeModalTitle) nodeModalTitle.textContent = `${poi.icon} ${poi.category}`;
-  if (nodeModalName) nodeModalName.textContent = poi.name;
-  if (nodeModalTypeIcon) nodeModalTypeIcon.textContent = poi.icon;
-  if (nodeModalTypeTag) nodeModalTypeTag.textContent = poi.category;
-  if (nodeModalHex) nodeModalHex.textContent = `WABE: #${poi.hexId.slice(-6).toUpperCase()}`;
+  if (nodeModalTitle) nodeModalTitle.textContent = `${poi.icon || '🏢'} ${poi.category || 'KNOTENPUNKT'}`;
+  if (nodeModalName) nodeModalName.textContent = poi.name || 'Cyber Gebäude';
+  if (nodeModalTypeIcon) nodeModalTypeIcon.textContent = poi.icon || '🏢';
+  if (nodeModalTypeTag) nodeModalTypeTag.textContent = poi.category || 'GEBÄUDE-KOMPLEX';
+  if (nodeModalHex) nodeModalHex.textContent = `WABE: #${(poi.hexId || '000000').slice(-6).toUpperCase()}`;
   if (nodeModalDistance) nodeModalDistance.textContent = `📍 ${Math.round(dist)}m`;
 
   if (nodeOwnerText) {
-    nodeOwnerText.textContent = isHexOwned ? `BESETZT VON ${ownerName.toUpperCase()}` : 'FREIER KNOTEN';
-    nodeOwnerText.style.color = zone ? zone.color : 'var(--user-color)';
+    if (isMine) {
+      nodeOwnerText.textContent = '🏢 IN DEINEM BESITZ';
+      nodeOwnerText.style.color = '#39ff14';
+    } else if (isOwned) {
+      nodeOwnerText.textContent = `GEHÖRT: ${(currentFort.owner || 'TAGGER').toUpperCase()}`;
+      nodeOwnerText.style.color = currentFort.color || '#ff0055';
+    } else {
+      nodeOwnerText.textContent = 'FREIES GEBÄUDE';
+      nodeOwnerText.style.color = 'var(--text-dim)';
+    }
   }
+
   if (nodeShieldText) nodeShieldText.textContent = `${currentFort.shieldHp || 0} / 100 HP`;
   if (nodeTurretLevel) nodeTurretLevel.textContent = currentFort.turretLevel > 0 ? `LVL ${currentFort.turretLevel} (AKTIV)` : 'LVL 0 (AUS)';
 
+  // Show/Hide Buy Button vs Upgrade Options
+  if (btnBuyBuilding) {
+    btnBuyBuilding.style.display = isMine ? 'none' : 'block';
+    btnBuyBuilding.textContent = isOwned ? '⚔️ GEBÄUDE ÜBERNEHMEN (100 💎 BITS)' : '🏢 DIESES GEBÄUDE KAUFEN (75 💎 BITS)';
+  }
+
+  if (nodeUpgradesSection) {
+    nodeUpgradesSection.style.display = isMine ? 'flex' : 'none';
+  }
+
   if (nodeModal) nodeModal.classList.add('active');
+}
+
+if (btnBuyBuilding) {
+  btnBuyBuilding.addEventListener('click', () => {
+    if (!activeSelectedPoi || !dataBitsManager || !poiManager) return;
+    const currentFort = poiManager.getFortification(activeSelectedPoi.id);
+    const cost = currentFort.isOwned ? 100 : 75;
+
+    if (!dataBitsManager.spendBits(cost)) {
+      showToast(`⚠️ Nicht genug Energy Bits! (Benötigt ${cost} 💎)`);
+      return;
+    }
+
+    const currentName = currentUser?.username || localStorage.getItem(SAVED_GUEST_NAME_KEY) || 'TAGGER_01';
+    poiManager.buyBuilding(activeSelectedPoi, currentName, userColor);
+    addXP(75, '🏢 GEBÄUDE ERFOLGREICH BESETZT!');
+    openNodeControlModal(activeSelectedPoi);
+    showToast(`🎉 ${activeSelectedPoi.name} GEKAUFT & VERTEIDIGT! (-${cost} 💎)`);
+  });
 }
 
 if (btnCloseNodeModal) {
@@ -1143,5 +1199,29 @@ if (btnUpgradeBeacon) {
     addXP(100, '📡 SIGNAL-BEACON AKTIVIERT');
     openNodeControlModal(activeSelectedPoi);
     showToast(`📡 SIGNAL-BEACON ONLINE! (+100 XP, -60 💎)`);
+  });
+}
+
+if (btnNodeSpray) {
+  btnNodeSpray.addEventListener('click', () => {
+    if (!activeSelectedPoi) return;
+    if (nodeModal) nodeModal.classList.remove('active');
+    sprayModalHexLabel.textContent = `GEBÄUDE: ${activeSelectedPoi.name.slice(0, 18).toUpperCase()}`;
+    if (graffitiCanvas) graffitiCanvas.clear();
+    sprayModal.classList.add('active');
+  });
+}
+
+if (btnNodeSendDrone) {
+  btnNodeSendDrone.addEventListener('click', () => {
+    if (!activeSelectedPoi || !droneManager) return;
+    if (nodeModal) nodeModal.classList.remove('active');
+    if (totalXp < DRONE_DEPLOY_COST_XP) {
+      showToast(`⚠️ Nicht genug XP für Drohne (${DRONE_DEPLOY_COST_XP} XP benötigt)!`);
+      return;
+    }
+    addXP(-DRONE_DEPLOY_COST_XP, '🛸 DROHNE ENTSANDT');
+    droneManager.deployDrone(activeSelectedPoi.hexId, userColor);
+    showToast(`🛸 Drohne auf dem Weg zu ${activeSelectedPoi.name}!`);
   });
 }

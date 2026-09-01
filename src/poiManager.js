@@ -1,5 +1,5 @@
 /**
- * PoiManager (OpenStreetMap POI Overpass API & Tower Defense Integration)
+ * PoiManager (OpenStreetMap Reverse Geocoding, Exact Map-Point Buildings & Tower Defense)
  */
 import * as h3 from 'h3-js';
 import maplibregl from 'maplibre-gl';
@@ -15,6 +15,8 @@ export class PoiManager {
     this.fortifiedNodes = this.loadFortifiedNodes();
     this.lastFetchCoords = null;
     this.isLoading = false;
+
+    this.renderExistingFortifiedMarkers();
   }
 
   loadFortifiedNodes() {
@@ -37,11 +39,13 @@ export class PoiManager {
   getFortification(poiId) {
     return (
       this.fortifiedNodes[poiId] || {
+        isOwned: false,
         turretLevel: 0,
         shieldHp: 0,
         beaconActive: false,
         owner: null,
-        color: '#ff8000'
+        color: '#ff8000',
+        boughtAt: null
       }
     );
   }
@@ -56,203 +60,172 @@ export class PoiManager {
     this.updateMarkerVisual(poiId);
   }
 
-  async fetchNearbyPOIs(lat, lng) {
-    if (this.isLoading) return;
+  buyBuilding(poi, ownerName, color) {
+    const newFort = {
+      isOwned: true,
+      owner: ownerName || 'Tagger',
+      color: color || '#ff8000',
+      turretLevel: 1,
+      shieldHp: 100,
+      beaconActive: false,
+      boughtAt: Date.now(),
+      poiData: poi
+    };
 
-    // Check if moved significantly (> 400m)
-    if (this.lastFetchCoords) {
-      const movedDist = this.getDistanceMeters(
-        this.lastFetchCoords.lat,
-        this.lastFetchCoords.lng,
-        lat,
-        lng
-      );
-      if (movedDist < 400 && this.pois.length > 0) return;
+    this.setFortification(poi.id, newFort);
+    this.addOrUpdateMarker(poi, newFort);
+    return newFort;
+  }
+
+  /**
+   * Resolves exact building / POI at any clicked map coordinate via OSM Reverse Geocoding
+   */
+  async resolvePoint(lat, lng) {
+    const hexId = h3.latLngToCell(lat, lng, 10);
+    const cleanLat = Number(lat.toFixed(5));
+    const cleanLng = Number(lng.toFixed(5));
+    const poiId = `bld_${cleanLat}_${cleanLng}`;
+
+    // Check if this point was already bought / saved
+    const existing = this.getFortification(poiId);
+    if (existing && existing.poiData) {
+      return { ...existing.poiData, id: poiId };
     }
 
-    this.isLoading = true;
-    this.lastFetchCoords = { lat, lng };
-
     try {
-      // Overpass API Query: Bounding box ~800m
-      const delta = 0.007;
-      const south = lat - delta;
-      const north = lat + delta;
-      const west = lng - delta * 1.5;
-      const east = lng + delta * 1.5;
-
-      const overpassQuery = `
-        [out:json][timeout:8];
-        (
-          node["historic"](${south},${west},${north},${east});
-          node["tourism"="attraction"](${south},${west},${north},${east});
-          node["amenity"~"cafe|bar|restaurant|library|townhall"](${south},${west},${north},${east});
-          node["railway"="station"](${south},${west},${north},${east});
-          node["telecom"](${south},${west},${north},${east});
-        );
-        out body 25;
-      `;
-
-      const res = await fetch('https://overpass-api.de/api/interpreter', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'data=' + encodeURIComponent(overpassQuery)
-      });
+      // Nominatim OpenStreetMap Reverse Geocode API
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+        { headers: { 'Accept-Language': 'de' } }
+      );
 
       if (res.ok) {
         const data = await res.json();
-        if (data && data.elements && data.elements.length > 0) {
-          this.processOverpassElements(data.elements);
-          this.isLoading = false;
-          return;
-        }
-      }
-    } catch (e) {
-      console.warn('[PoiManager] Overpass API offline/timeout, verwende lokale POIs:', e.message);
-    }
+        const addr = data.address || {};
+        const buildingName =
+          data.name ||
+          (addr.road ? `${addr.road} ${addr.house_number || ''}`.trim() : null) ||
+          data.display_name?.split(',')[0] ||
+          'Cyber Gebäude';
 
-    // Fallback: Generate smart procedural local POIs if Overpass is slow/offline
-    this.generateFallbackPOIs(lat, lng);
-    this.isLoading = false;
-  }
+        const { type, icon, category } = this.categorizeAddress(data);
 
-  processOverpassElements(elements) {
-    const parsed = elements
-      .filter(el => el.tags && (el.tags.name || el.tags.amenity || el.tags.historic))
-      .map(el => {
-        const name = el.tags.name || this.getDefaultName(el.tags);
-        const { type, icon, category } = this.categorizeTags(el.tags);
-        const hexId = h3.latLngToCell(el.lat, el.lon, 10);
-
-        return {
-          id: `osm_${el.id}`,
-          name,
-          lat: el.lat,
-          lng: el.lon,
+        const pointData = {
+          id: poiId,
+          name: buildingName,
+          lat,
+          lng,
           hexId,
-          type,
           icon,
           category,
-          tags: el.tags
+          type,
+          fullAddress: data.display_name
         };
-      });
 
-    this.pois = parsed;
-    this.renderMarkers();
+        return pointData;
+      }
+    } catch (e) {
+      console.warn('[PoiManager] Reverse geocoding network fallback:', e.message);
+    }
+
+    // Procedural Fallback
+    return {
+      id: poiId,
+      name: `SEKTOR-KNOTEN ${hexId.slice(-6).toUpperCase()}`,
+      lat,
+      lng,
+      hexId,
+      icon: '🏢',
+      category: 'GEBÄUDE-KOMPLEX',
+      type: 'building',
+      fullAddress: `Waben-Koordinate (${lat.toFixed(4)}, ${lng.toFixed(4)})`
+    };
   }
 
-  generateFallbackPOIs(lat, lng) {
-    const centerHex = h3.latLngToCell(lat, lng, 10);
-    const ringHexes = h3.gridRingUnsafe(centerHex, 1);
-    const demoTemplates = [
-      { name: 'KRAFTWERK ALPHA', type: 'telecom', icon: '⚡', category: 'SIGNAL-VERSTÄRKER' },
-      { name: 'CYBER ARCHIV', type: 'library', icon: '🏢', category: 'DATEN-FESTUNG' },
-      { name: 'NEON CAFÉ OASIS', type: 'cafe', icon: '☕', category: 'STREET-HUB' },
-      { name: 'METRO STATION NEXUS', type: 'station', icon: '🚉', category: 'TRANSIT-KNOTEN' },
-      { name: 'MONUMENT DER EROBERER', type: 'monument', icon: '🏛️', category: 'ANCIENT CORE' }
-    ];
+  categorizeAddress(data) {
+    const addr = data.address || {};
+    const ext = data.extratags || {};
+    const cat = data.category || '';
+    const type = data.type || '';
 
-    const fallback = ringHexes.map((hex, idx) => {
-      const [hLat, hLng] = h3.cellToLatLng(hex);
-      const tpl = demoTemplates[idx % demoTemplates.length];
-      return {
-        id: `node_gen_${hex}`,
-        name: tpl.name,
-        lat: hLat,
-        lng: hLng,
-        hexId: hex,
-        type: tpl.type,
-        icon: tpl.icon,
-        category: tpl.category
-      };
-    });
+    if (cat === 'historic' || cat === 'tourism' || type === 'attraction' || type === 'monument') {
+      return { type: 'monument', icon: '🏛️', category: 'HISTORISCHES DENKMAL' };
+    }
+    if (addr.amenity === 'cafe' || addr.amenity === 'bar' || addr.amenity === 'restaurant' || type === 'pub') {
+      return { type: 'cafe', icon: '☕', category: 'STREET-HUB & CAFÉ' };
+    }
+    if (addr.railway || type === 'station' || type === 'subway') {
+      return { type: 'station', icon: '🚉', category: 'TRANSIT-KNOTENPUNKT' };
+    }
+    if (addr.amenity === 'library' || addr.amenity === 'university' || addr.amenity === 'townhall') {
+      return { type: 'library', icon: '🏢', category: 'ÖFFENTLICHES GEBÄUDE' };
+    }
+    if (addr.amenity === 'bank' || addr.shop) {
+      return { type: 'shop', icon: '🏦', category: 'HANDELS-ZENTRUM' };
+    }
+    if (cat === 'power' || cat === 'telecom') {
+      return { type: 'telecom', icon: '⚡', category: 'ENERGIE & NETZWERK' };
+    }
 
-    this.pois = fallback;
-    this.renderMarkers();
+    return { type: 'building', icon: '🏢', category: 'WOHN- & GEWERBEBAU' };
   }
 
-  categorizeTags(tags) {
-    if (tags.historic || tags.tourism === 'attraction') {
-      return { type: 'monument', icon: '🏛️', category: 'ANCIENT CORE' };
-    }
-    if (tags.telecom || tags.power) {
-      return { type: 'telecom', icon: '⚡', category: 'SIGNAL-VERSTÄRKER' };
-    }
-    if (tags.railway === 'station') {
-      return { type: 'station', icon: '🚉', category: 'TRANSIT-KNOTEN' };
-    }
-    if (tags.amenity === 'library' || tags.amenity === 'townhall') {
-      return { type: 'fortress', icon: '🏢', category: 'DATEN-FESTUNG' };
-    }
-    return { type: 'social', icon: '☕', category: 'STREET-HUB' };
-  }
-
-  getDefaultName(tags) {
-    if (tags.amenity) return `Cyber ${tags.amenity.toUpperCase()}`;
-    if (tags.historic) return `Historischer Knoten`;
-    if (tags.railway) return `Bahnhof Nexus`;
-    return 'Knotenpunkt';
-  }
-
-  renderMarkers() {
+  renderExistingFortifiedMarkers() {
     if (!this.map) return;
-
-    // Clear removed markers
-    for (const [id, marker] of this.markers.entries()) {
-      if (!this.pois.some(p => p.id === id)) {
-        marker.remove();
-        this.markers.delete(id);
+    Object.keys(this.fortifiedNodes).forEach(id => {
+      const fort = this.fortifiedNodes[id];
+      if (fort.poiData && fort.isOwned) {
+        this.addOrUpdateMarker(fort.poiData, fort);
       }
+    });
+  }
+
+  addOrUpdateMarker(poi, fort) {
+    if (!this.map || !poi) return;
+
+    if (this.markers.has(poi.id)) {
+      this.updateMarkerVisual(poi.id);
+      return;
     }
 
-    // Add or update markers
-    this.pois.forEach(poi => {
-      if (this.markers.has(poi.id)) {
-        this.updateMarkerVisual(poi.id);
-        return;
+    const el = document.createElement('div');
+    el.className = 'poi-map-marker';
+    el.id = `marker_${poi.id}`;
+    el.innerHTML = `
+      <div class="poi-marker-badge fortified" style="--poi-color: ${fort.color || '#ff8000'}">
+        <span class="poi-marker-icon">${poi.icon || '🏢'}</span>
+        <span class="poi-marker-name">${(poi.name || 'Gebäude').slice(0, 16)}</span>
+        ${fort.turretLevel > 0 ? `<span class="poi-turret-tag">⚡ L${fort.turretLevel}</span>` : ''}
+        ${fort.shieldHp > 0 ? `<span class="poi-shield-tag">🛡️</span>` : ''}
+      </div>
+    `;
+
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (this.onPoiSelect) {
+        this.onPoiSelect(poi, this.getFortification(poi.id));
       }
-
-      const fort = this.getFortification(poi.id);
-      const el = document.createElement('div');
-      el.className = 'poi-map-marker';
-      el.id = `marker_${poi.id}`;
-      el.innerHTML = `
-        <div class="poi-marker-badge" style="--poi-color: ${fort.color || '#ff8000'}">
-          <span class="poi-marker-icon">${poi.icon}</span>
-          <span class="poi-marker-name">${poi.name.slice(0, 16)}</span>
-          ${fort.turretLevel > 0 ? `<span class="poi-turret-tag">⚡ L${fort.turretLevel}</span>` : ''}
-          ${fort.shieldHp > 0 ? `<span class="poi-shield-tag">🛡️</span>` : ''}
-        </div>
-      `;
-
-      el.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (this.onPoiSelect) {
-          this.onPoiSelect(poi, this.getFortification(poi.id));
-        }
-      });
-
-      const marker = new maplibregl.Marker({ element: el })
-        .setLngLat([poi.lng, poi.lat])
-        .addTo(this.map);
-
-      this.markers.set(poi.id, marker);
     });
+
+    const marker = new maplibregl.Marker({ element: el })
+      .setLngLat([poi.lng, poi.lat])
+      .addTo(this.map);
+
+    this.markers.set(poi.id, marker);
   }
 
   updateMarkerVisual(poiId) {
     const marker = this.markers.get(poiId);
     if (!marker) return;
-    const poi = this.pois.find(p => p.id === poiId);
-    if (!poi) return;
 
     const fort = this.getFortification(poiId);
+    const poi = fort.poiData;
     const el = marker.getElement();
-    if (el) {
+    if (el && poi) {
       el.innerHTML = `
-        <div class="poi-marker-badge ${fort.turretLevel > 0 ? 'fortified' : ''}" style="--poi-color: ${fort.color || '#ff8000'}">
-          <span class="poi-marker-icon">${poi.icon}</span>
-          <span class="poi-marker-name">${poi.name.slice(0, 16)}</span>
+        <div class="poi-marker-badge ${fort.isOwned ? 'fortified' : ''}" style="--poi-color: ${fort.color || '#ff8000'}">
+          <span class="poi-marker-icon">${poi.icon || '🏢'}</span>
+          <span class="poi-marker-name">${(poi.name || 'Gebäude').slice(0, 16)}</span>
           ${fort.turretLevel > 0 ? `<span class="poi-turret-tag">⚡ L${fort.turretLevel}</span>` : ''}
           ${fort.shieldHp > 0 ? `<span class="poi-shield-tag">🛡️</span>` : ''}
         </div>
