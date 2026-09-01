@@ -1182,8 +1182,15 @@ function openNodeControlModal(poi, fort) {
     }
   }
 
-  if (nodeShieldText) nodeShieldText.textContent = `${currentFort.shieldHp || 0} / 100 HP`;
-  if (nodeTurretLevel) nodeTurretLevel.textContent = currentFort.turretLevel > 0 ? `LVL ${currentFort.turretLevel} (AKTIV)` : 'LVL 0 (AUS)';
+  const clusterBoost = hqManager ? hqManager.getClusterShieldBoost(poi) : 0;
+  const isConnected = hqManager ? hqManager.isNodeConnectedToHQ(poi) : false;
+
+  if (nodeShieldText) {
+    nodeShieldText.textContent = `${currentFort.shieldHp || 0} / 100 HP${clusterBoost > 0 ? ` (+${clusterBoost}% Grid)` : ''}`;
+  }
+  if (nodeTurretLevel) {
+    nodeTurretLevel.textContent = currentFort.turretLevel > 0 ? `LVL ${currentFort.turretLevel} (AKTIV)` : 'LVL 0 (AUS)';
+  }
 
   // Data Fountain spawning for special building types
   if (poi.isDataDispenser && dataBitsManager) {

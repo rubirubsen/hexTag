@@ -105,6 +105,7 @@ export class DroneManager {
       durationTotal: 90, // 90 Sekunden Einsatzdauer
       durationRemaining: 90,
       progress: 0,
+      isHyperlane: target.isHyperlane || false,
       orbitAngle: Math.random() * Math.PI * 2,
       createdAt: Date.now()
     };
@@ -143,13 +144,15 @@ export class DroneManager {
       const drone = this.drones[i];
       drone.durationRemaining -= deltaSeconds;
 
+      const travelTime = drone.isHyperlane ? 4 : 8; // Hyperlane flies in 4s!
       const elapsed = drone.durationTotal - drone.durationRemaining;
-      drone.progress = Math.min(1, elapsed / 8); // 8s Anflugzeit
+      drone.progress = Math.min(1, elapsed / travelTime);
 
       if (drone.progress < 1) {
-        // En route flight towards target
-        drone.currentLat += (drone.targetLat - drone.currentLat) * 0.2;
-        drone.currentLng += (drone.targetLng - drone.currentLng) * 0.2;
+        // En route flight towards target (Hyperlane speed boost)
+        const step = drone.isHyperlane ? 0.35 : 0.2;
+        drone.currentLat += (drone.targetLat - drone.currentLat) * step;
+        drone.currentLng += (drone.targetLng - drone.currentLng) * step;
       } else {
         // Orbital patrol circling the target building/node
         drone.orbitAngle = (drone.orbitAngle || 0) + 0.15;

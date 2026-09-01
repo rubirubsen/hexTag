@@ -1,6 +1,11 @@
 /**
- * HQManager (Cyber Base Building Simulation & Laser Mesh Network Links)
- * Manages Data-Silos, Drone Hangars, Relay Antennas, and connects owned buildings with glowing laser lines.
+ * HQManager (Cyber Base Building Simulation, Laser Mesh Network & Control Fields)
+ * Features:
+ * 1. Data-Silos, Hangar, Relay, Solar Synthesizer upgrades
+ * 2. Glowing Laser-Links connecting HQ and owned nodes
+ * 3. Triangular Sector Control Fields (Ingress-style territory fields)
+ * 4. Automated Data-Pipeline harvesting into HQ Silos
+ * 5. Cluster Defense Shield Boost & Drone Hyperlanes
  */
 export class HQManager {
   constructor(map, dataBitsManager, poiManager, onUpdate) {
@@ -10,8 +15,13 @@ export class HQManager {
     this.onUpdate = onUpdate;
 
     this.data = this.loadData();
+    this.ownedPois = [];
+    this.activeLinks = [];
+    this.userColor = '#ff8000';
+
     this.syncCapacityToBitsManager();
     this.initNetworkLayers();
+    this.startPipelineLoop();
   }
 
   loadData() {
@@ -81,13 +91,32 @@ export class HQManager {
 
   initNetworkLayers() {
     if (!this.map) return;
+
+    // 1. Control Fields (Shimmering Polygons)
+    if (!this.map.getSource('cyber-control-fields-source')) {
+      this.map.addSource('cyber-control-fields-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] }
+      });
+
+      this.map.addLayer({
+        id: 'control-fields-fill',
+        type: 'fill',
+        source: 'cyber-control-fields-source',
+        paint: {
+          'fill-color': ['get', 'color'],
+          'fill-opacity': 0.18
+        }
+      });
+    }
+
+    // 2. Network Laser Lines
     if (!this.map.getSource('cyber-network-links-source')) {
       this.map.addSource('cyber-network-links-source', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] }
       });
 
-      // Neon Laser Beam Outer Glow
       this.map.addLayer({
         id: 'network-laser-glow',
         type: 'line',
@@ -100,7 +129,6 @@ export class HQManager {
         }
       });
 
-      // Sharp Cyber Core Laser Line
       this.map.addLayer({
         id: 'network-laser-core',
         type: 'line',
@@ -116,16 +144,20 @@ export class HQManager {
   }
 
   updateNetworkLinks(ownedPois = [], userColor = '#ff8000') {
+    this.ownedPois = ownedPois;
+    this.userColor = userColor;
     if (!this.map) return;
-    const source = this.map.getSource('cyber-network-links-source');
-    if (!source) return;
 
-    const features = [];
+    const linksSource = this.map.getSource('cyber-network-links-source');
+    const fieldsSource = this.map.getSource('cyber-control-fields-source');
+
+    const linkFeatures = [];
+    const fieldFeatures = [];
     const hqCoord = [this.data.lng, this.data.lat];
 
+    // Links from HQ to owned buildings
     ownedPois.forEach(poi => {
-      // Laser link from HQ to each owned node
-      features.push({
+      linkFeatures.push({
         type: 'Feature',
         properties: { color: userColor },
         geometry: {
@@ -135,14 +167,14 @@ export class HQManager {
       });
     });
 
-    // Cross-link nearby owned nodes (< 800m) to form triangular mesh fields
+    // Cross-links and triangular Control Fields (< 850m)
     for (let i = 0; i < ownedPois.length; i++) {
       for (let j = i + 1; j < ownedPois.length; j++) {
         const p1 = ownedPois[i];
         const p2 = ownedPois[j];
         const dist = this.getDistanceMeters(p1.lat, p1.lng, p2.lat, p2.lng);
         if (dist <= 850) {
-          features.push({
+          linkFeatures.push({
             type: 'Feature',
             properties: { color: userColor },
             geometry: {
@@ -150,11 +182,61 @@ export class HQManager {
               coordinates: [[p1.lng, p1.lat], [p2.lng, p2.lat]]
             }
           });
+
+          // Form triangular Control Field with HQ
+          fieldFeatures.push({
+            type: 'Feature',
+            properties: { color: userColor },
+            geometry: {
+              type: 'Polygon',
+              coordinates: [[hqCoord, [p1.lng, p1.lat], [p2.lng, p2.lat], hqCoord]]
+            }
+          });
         }
       }
     }
 
-    source.setData({ type: 'FeatureCollection', features });
+    if (linksSource) linksSource.setData({ type: 'FeatureCollection', features: linkFeatures });
+    if (fieldsSource) fieldsSource.setData({ type: 'FeatureCollection', features: fieldFeatures });
+  }
+
+  startPipelineLoop() {
+    // Automated Data-Pipeline: Transfer bits from connected nodes into HQ Silos every 60s
+    setInterval(() => {
+      if (!this.dataBitsManager) return;
+
+      let pipelineGain = 0;
+
+      // 1. Solar Synthesizer Yield
+      const synthYields = [0, 5, 15, 30];
+      const synthRate = synthYields[this.data.synthLevel || 0] || 0;
+      if (synthRate > 0) {
+        pipelineGain += Math.ceil(synthRate / 5); // Per minute
+      }
+
+      // 2. Connected Data Dispensers Yield
+      const dispensers = this.ownedPois.filter(p => p.isDataDispenser);
+      if (dispensers.length > 0) {
+        pipelineGain += dispensers.length * 2; // +2 Bits per connected dispenser node
+      }
+
+      if (pipelineGain > 0 && this.dataBitsManager.totalBits < this.getMaxStorage()) {
+        this.dataBitsManager.totalBits = Math.min(this.getMaxStorage(), this.dataBitsManager.totalBits + pipelineGain);
+        this.dataBitsManager.saveBitsCount();
+        if (this.onUpdate) this.onUpdate(this.data);
+      }
+    }, 60000);
+  }
+
+  isNodeConnectedToHQ(poi) {
+    if (!poi) return false;
+    return this.ownedPois.some(p => p.id === poi.id);
+  }
+
+  getClusterShieldBoost(poi) {
+    if (!this.isNodeConnectedToHQ(poi)) return 0;
+    // +25% shield HP per connected building in cluster (up to +100%)
+    return Math.min(100, (this.ownedPois.length - 1) * 25);
   }
 
   getDistanceMeters(lat1, lon1, lat2, lon2) {
