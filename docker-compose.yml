@@ -9,7 +9,6 @@ services:
     restart: unless-stopped
     ports:
       # Format: "HOST_PORT:CONTAINER_PORT"
-      # Du kannst den Host-Port ueber die .env Datei oder direkt hier aendern (z.B. 3080, 8085, etc.)
-      - "${HEXTAG_PORT:-8080}:80"
+      - "${HEXTAG_PORT:-8480}:80"
     environment:
       - NODE_ENV=production

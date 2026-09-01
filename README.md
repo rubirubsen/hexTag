@@ -9,7 +9,7 @@ Alle Details, Architektur-Entscheidungen, Unity-Setup-Anleitungen und die Roadma
 ```bash
 docker compose up -d --build
 ```
-Die App ist danach unter `http://localhost:8080` erreichbar.
+Die App ist danach standardmäßig unter `http://<DEINE-VPS-IP>:8480` erreichbar.
 
 ## Lokale Entwicklung (Node.js)
 ```bash
