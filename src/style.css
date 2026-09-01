@@ -1533,24 +1533,12 @@ body.hud-hidden .hud-restore-floating-btn {
   text-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
 }
 
-/* OSM POI Map Marker */
-.poi-map-marker {
-  cursor: pointer;
-  z-index: 5;
-  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.poi-map-marker:hover, .poi-map-marker:active {
-  transform: scale(1.18);
-  z-index: 10;
-}
-
 /* POI Minimal Building Pin (Clean & Elegant Highlight) */
 .poi-map-marker {
-  position: relative;
+  width: 28px;
+  height: 28px;
   cursor: pointer;
   z-index: 8;
-  transform: translate(-50%, -50%);
 }
 
 .poi-pin {

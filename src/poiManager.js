@@ -211,7 +211,7 @@ export class PoiManager {
       }
     });
 
-    const marker = new maplibregl.Marker({ element: el })
+    const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
       .setLngLat([poi.lng, poi.lat])
       .addTo(this.map);
 
