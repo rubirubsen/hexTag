@@ -504,7 +504,7 @@ const map = new maplibregl.Map({
 
 const markerEl = document.createElement('div');
 markerEl.className = 'user-marker';
-const playerMarker = new maplibregl.Marker({ element: markerEl })
+const playerMarker = new maplibregl.Marker({ element: markerEl, anchor: 'center' })
   .setLngLat([userLocation.lng, userLocation.lat])
   .addTo(map);
 

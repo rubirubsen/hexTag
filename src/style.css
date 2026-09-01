@@ -1472,7 +1472,7 @@ body.hud-hidden .hud-restore-floating-btn {
   border-radius: 50%;
   box-shadow: 0 0 20px var(--user-color), 0 0 35px var(--user-color);
   position: relative;
-  transition: transform 0.15s ease-out;
+  pointer-events: none;
 }
 
 .user-marker::after {
