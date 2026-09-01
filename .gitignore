@@ -24,3 +24,12 @@ Thumbs.db
 *.userprefs
 *.pidb
 *.booproj
+
+# Agent rules & local configs
+.agents/
+.agent/
+_agents/
+_agent/
+.env
+.env.*
+
