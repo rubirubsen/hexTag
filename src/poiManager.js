@@ -81,21 +81,10 @@ export class PoiManager {
    * Resolves exact building / POI at any clicked map coordinate via OSM Reverse Geocoding
    */
   async resolvePoint(lat, lng) {
-    const hexId = h3.latLngToCell(lat, lng, 10);
-    const cleanLat = Number(lat.toFixed(5));
-    const cleanLng = Number(lng.toFixed(5));
-    const poiId = `bld_${cleanLat}_${cleanLng}`;
-
-    // Check if this point was already bought / saved
-    const existing = this.getFortification(poiId);
-    if (existing && existing.poiData) {
-      return { ...existing.poiData, id: poiId };
-    }
-
     try {
-      // Nominatim OpenStreetMap Reverse Geocode API
+      // Nominatim OpenStreetMap Reverse Geocode API (Zoom 18 = Building-level precision)
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&extratags=1`,
         { headers: { 'Accept-Language': 'de' } }
       );
 
@@ -108,13 +97,27 @@ export class PoiManager {
           data.display_name?.split(',')[0] ||
           'Cyber Gebäude';
 
+        // Exact OpenStreetMap centroid coordinates
+        const osmLat = data.lat ? parseFloat(data.lat) : lat;
+        const osmLng = data.lon ? parseFloat(data.lon) : lng;
+        const poiId = data.osm_id ? `osm_${data.osm_type || 'way'}_${data.osm_id}` : `bld_${osmLat.toFixed(5)}_${osmLng.toFixed(5)}`;
+        const hexId = h3.latLngToCell(osmLat, osmLng, 10);
+
+        // Check if already in fortified nodes
+        const existing = this.getFortification(poiId);
+        if (existing && existing.poiData) {
+          return { ...existing.poiData, id: poiId };
+        }
+
         const { type, icon, category } = this.categorizeAddress(data);
 
         const pointData = {
           id: poiId,
+          osmId: data.osm_id,
+          osmType: data.osm_type,
           name: buildingName,
-          lat,
-          lng,
+          lat: osmLat,
+          lng: osmLng,
           hexId,
           icon,
           category,
@@ -129,6 +132,8 @@ export class PoiManager {
     }
 
     // Procedural Fallback
+    const hexId = h3.latLngToCell(lat, lng, 10);
+    const poiId = `bld_${lat.toFixed(5)}_${lng.toFixed(5)}`;
     return {
       id: poiId,
       name: `SEKTOR-KNOTEN ${hexId.slice(-6).toUpperCase()}`,
