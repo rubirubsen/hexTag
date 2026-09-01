@@ -192,11 +192,10 @@ export class PoiManager {
     el.className = 'poi-map-marker';
     el.id = `marker_${poi.id}`;
     el.innerHTML = `
-      <div class="poi-marker-badge fortified" style="--poi-color: ${fort.color || '#ff8000'}">
-        <span class="poi-marker-icon">${poi.icon || '🏢'}</span>
-        <span class="poi-marker-name">${(poi.name || 'Gebäude').slice(0, 16)}</span>
-        ${fort.turretLevel > 0 ? `<span class="poi-turret-tag">⚡ L${fort.turretLevel}</span>` : ''}
-        ${fort.shieldHp > 0 ? `<span class="poi-shield-tag">🛡️</span>` : ''}
+      <div class="poi-pin ${fort.isOwned ? 'fortified' : ''}" style="--poi-color: ${fort.color || '#ff8000'}" title="${poi.name || 'Gebäude'}">
+        <span class="poi-pin-icon">${poi.icon || '🏢'}</span>
+        ${fort.turretLevel > 0 ? `<div class="poi-turret-orbit-dot"></div>` : ''}
+        ${fort.shieldHp > 0 ? `<div class="poi-shield-aura"></div>` : ''}
       </div>
     `;
 
@@ -223,11 +222,10 @@ export class PoiManager {
     const el = marker.getElement();
     if (el && poi) {
       el.innerHTML = `
-        <div class="poi-marker-badge ${fort.isOwned ? 'fortified' : ''}" style="--poi-color: ${fort.color || '#ff8000'}">
-          <span class="poi-marker-icon">${poi.icon || '🏢'}</span>
-          <span class="poi-marker-name">${(poi.name || 'Gebäude').slice(0, 16)}</span>
-          ${fort.turretLevel > 0 ? `<span class="poi-turret-tag">⚡ L${fort.turretLevel}</span>` : ''}
-          ${fort.shieldHp > 0 ? `<span class="poi-shield-tag">🛡️</span>` : ''}
+        <div class="poi-pin ${fort.isOwned ? 'fortified' : ''}" style="--poi-color: ${fort.color || '#ff8000'}" title="${poi.name || 'Gebäude'}">
+          <span class="poi-pin-icon">${poi.icon || '🏢'}</span>
+          ${fort.turretLevel > 0 ? `<div class="poi-turret-orbit-dot"></div>` : ''}
+          ${fort.shieldHp > 0 ? `<div class="poi-shield-aura"></div>` : ''}
         </div>
       `;
     }

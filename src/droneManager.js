@@ -82,9 +82,9 @@ export class DroneManager {
         targetLng = this.hq ? this.hq.lng : 13.40;
       }
     } else if (typeof target === 'object') {
-      targetHexId = target.targetHexId;
-      targetLat = target.targetLat;
-      targetLng = target.targetLng;
+      targetHexId = target.targetHexId || '';
+      targetLat = target.targetLat || target.lat;
+      targetLng = target.targetLng || target.lng;
       color = target.color || color;
       author = target.author || author;
     }
@@ -105,6 +105,7 @@ export class DroneManager {
       durationTotal: 90, // 90 Sekunden Einsatzdauer
       durationRemaining: 90,
       progress: 0,
+      orbitAngle: Math.random() * Math.PI * 2,
       createdAt: Date.now()
     };
 
@@ -127,7 +128,7 @@ export class DroneManager {
     el.style.setProperty('--drone-color', drone.color);
     el.innerHTML = `
       <div class="drone-x-symbol">🛸</div>
-      <div class="drone-tag">${drone.targetHexId.slice(-4).toUpperCase()}</div>
+      <div class="drone-tag">${drone.targetHexId ? drone.targetHexId.slice(-4).toUpperCase() : 'PATROL'}</div>
     `;
 
     const marker = new maplibregl.Marker({ element: el })
@@ -143,10 +144,20 @@ export class DroneManager {
       drone.durationRemaining -= deltaSeconds;
 
       const elapsed = drone.durationTotal - drone.durationRemaining;
-      drone.progress = Math.min(1, elapsed / 10); // 10s Flugzeit
+      drone.progress = Math.min(1, elapsed / 8); // 8s Anflugzeit
 
-      drone.currentLat = drone.currentLat + (drone.targetLat - drone.currentLat) * 0.15;
-      drone.currentLng = drone.currentLng + (drone.targetLng - drone.currentLng) * 0.15;
+      if (drone.progress < 1) {
+        // En route flight towards target
+        drone.currentLat += (drone.targetLat - drone.currentLat) * 0.2;
+        drone.currentLng += (drone.targetLng - drone.currentLng) * 0.2;
+      } else {
+        // Orbital patrol circling the target building/node
+        drone.orbitAngle = (drone.orbitAngle || 0) + 0.15;
+        const orbitRadiusLat = 0.00045; // ~50m Radius
+        const orbitRadiusLng = 0.00065;
+        drone.currentLat = drone.targetLat + Math.sin(drone.orbitAngle) * orbitRadiusLat;
+        drone.currentLng = drone.targetLng + Math.cos(drone.orbitAngle) * orbitRadiusLng;
+      }
 
       const marker = this.droneMarkers.get(drone.id);
       if (marker) {
