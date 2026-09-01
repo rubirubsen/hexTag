@@ -27,6 +27,11 @@
       </div>
     </div>
 
+    <div class="hud-card bits-badge" id="dataBitsCard" title="Data Bits gesammelt (Energie)">
+      <div class="stat-label">ENERGY BITS</div>
+      <div class="stat-value" id="dataBitsDisplay">💎 50</div>
+    </div>
+
     <div class="hud-card score-badge">
       <div class="stat-label">TOTAL XP</div>
       <div class="stat-value" id="totalXpDisplay">0</div>
@@ -229,6 +234,78 @@
           </div>
 
           <button class="action-btn" id="btnLogout" style="margin-top: 12px; width: 100%; border-color: #ff0055; color: #ff0055;">ABMELDEN</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- POI / NODE DEFENSE & CONTROL MODAL -->
+  <div class="modal-backdrop" id="nodeModal">
+    <div class="spray-panel node-panel">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span id="nodeModalTitle">🏛️ OSM KNOTENPUNKT</span>
+          <small id="nodeModalSubtitle">KNOTEN-VERTEIDIGUNG & TOWER DEFENSE</small>
+        </div>
+        <button class="close-modal-btn" id="btnCloseNodeModal">✕</button>
+      </div>
+
+      <div class="node-modal-content">
+        <div class="node-hero-card">
+          <div class="node-type-icon" id="nodeModalTypeIcon">🏛️</div>
+          <div class="node-hero-info">
+            <h3 id="nodeModalName">Gebäudename</h3>
+            <span class="node-type-tag" id="nodeModalTypeTag">MONUMENT</span>
+            <div class="node-coords-row">
+              <span id="nodeModalHex">WABE: #000000</span>
+              <span id="nodeModalDistance">📍 0m</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="node-defense-status">
+          <div class="defense-stat-box">
+            <span class="def-label">STATUS</span>
+            <strong id="nodeOwnerText" style="color: var(--user-color)">FREIER KNOTEN</strong>
+          </div>
+          <div class="defense-stat-box">
+            <span class="def-label">SCHUTZSCHILD</span>
+            <strong id="nodeShieldText">0 / 100 HP</strong>
+          </div>
+          <div class="defense-stat-box">
+            <span class="def-label">TURRET LEVEL</span>
+            <strong id="nodeTurretLevel">LVL 0 (AUS)</strong>
+          </div>
+        </div>
+
+        <!-- UPGRADE MODULES (Data Bits Spending) -->
+        <div class="node-upgrades-section">
+          <div class="upgrade-card" id="btnUpgradeTurret">
+            <div class="upgrade-icon">⚡</div>
+            <div class="upgrade-info">
+              <strong>EMP-Störsender (Turret)</strong>
+              <small>Verlangsamt Feinde & schießt Drohnen ab</small>
+            </div>
+            <button class="upgrade-action-btn" id="btnTurretCost">50 💎</button>
+          </div>
+
+          <div class="upgrade-card" id="btnUpgradeShield">
+            <div class="upgrade-icon">🛡️</div>
+            <div class="upgrade-info">
+              <strong>Plasma-Schutzschild</strong>
+              <small>Verhindert feindliche Eroberung (+50 HP)</small>
+            </div>
+            <button class="upgrade-action-btn" id="btnShieldCost">40 💎</button>
+          </div>
+
+          <div class="upgrade-card" id="btnUpgradeBeacon">
+            <div class="upgrade-icon">📡</div>
+            <div class="upgrade-info">
+              <strong>Signal-Verstärker</strong>
+              <small>Erhöht Drohnen-Reichweite & passive XP</small>
+            </div>
+            <button class="upgrade-action-btn" id="btnBeaconCost">60 💎</button>
+          </div>
         </div>
       </div>
     </div>

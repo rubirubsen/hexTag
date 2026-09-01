@@ -4,6 +4,8 @@ import { GraffitiCanvas } from './graffitiCanvas.js';
 import { tagStore } from './tagStore.js';
 import { ARViewer } from './arViewer.js';
 import { DroneManager } from './droneManager.js';
+import { DataBitsManager } from './dataBitsManager.js';
+import { PoiManager } from './poiManager.js';
 
 // --- GAME CONFIGURATION ---
 const H3_RESOLUTION = 10;
@@ -45,6 +47,7 @@ const currentHexLabel = document.getElementById('currentHexLabel');
 const captureStatusText = document.getElementById('captureStatusText');
 const hexTagCount = document.getElementById('hexTagCount');
 const totalXpDisplay = document.getElementById('totalXpDisplay');
+const dataBitsDisplay = document.getElementById('dataBitsDisplay');
 const gpsStatus = document.getElementById('gpsStatus');
 const toast = document.getElementById('toast');
 const userColorDot = document.getElementById('userColorDot');
@@ -67,6 +70,22 @@ const sprayModalHexLabel = document.getElementById('sprayModalHexLabel');
 const galleryModal = document.getElementById('galleryModal');
 const galleryHexLabel = document.getElementById('galleryHexLabel');
 const galleryGrid = document.getElementById('galleryGrid');
+
+// POI Node Modal Elements
+const nodeModal = document.getElementById('nodeModal');
+const btnCloseNodeModal = document.getElementById('btnCloseNodeModal');
+const nodeModalTitle = document.getElementById('nodeModalTitle');
+const nodeModalName = document.getElementById('nodeModalName');
+const nodeModalTypeIcon = document.getElementById('nodeModalTypeIcon');
+const nodeModalTypeTag = document.getElementById('nodeModalTypeTag');
+const nodeModalHex = document.getElementById('nodeModalHex');
+const nodeModalDistance = document.getElementById('nodeModalDistance');
+const nodeOwnerText = document.getElementById('nodeOwnerText');
+const nodeShieldText = document.getElementById('nodeShieldText');
+const nodeTurretLevel = document.getElementById('nodeTurretLevel');
+const btnUpgradeTurret = document.getElementById('btnUpgradeTurret');
+const btnUpgradeShield = document.getElementById('btnUpgradeShield');
+const btnUpgradeBeacon = document.getElementById('btnUpgradeBeacon');
 
 // Auth Modal
 const authModal = document.getElementById('authModal');
@@ -409,13 +428,32 @@ const playerMarker = new maplibregl.Marker({ element: markerEl })
   .setLngLat([userLocation.lng, userLocation.lat])
   .addTo(map);
 
-// --- 4. DRONE & HQ MANAGER ---
+// --- 4. DRONE, DATA BITS & POI MANAGERS ---
 let droneManager = null;
+let dataBitsManager = null;
+let poiManager = null;
+let activeSelectedPoi = null;
 
 map.on('load', () => {
-  console.log('[hexTag] Initialisiere Map, SSO & MSSQL Sync...');
+  console.log('[hexTag] Initialisiere Map, SSO, DataBits & OSM POIs...');
 
   droneManager = new DroneManager(map, handleDroneManagerUpdate);
+
+  dataBitsManager = new DataBitsManager(map, (data) => {
+    if (dataBitsDisplay) {
+      dataBitsDisplay.textContent = `💎 ${data.totalBits}`;
+    }
+    if (data.gained) {
+      showToast(`✨ +${data.gained} ENERGY BITS GESAMMELT!`);
+    }
+  });
+  if (dataBitsDisplay && dataBitsManager) {
+    dataBitsDisplay.textContent = `💎 ${dataBitsManager.totalBits}`;
+  }
+
+  poiManager = new PoiManager(map, (poi, fort) => {
+    openNodeControlModal(poi, fort);
+  });
 
   map.addSource('hex-grid', {
     type: 'geojson',
@@ -448,6 +486,13 @@ map.on('load', () => {
   updateHexGrid(userLocation.lat, userLocation.lng);
   startGeolocation();
   syncColorButtons();
+
+  if (dataBitsManager) {
+    dataBitsManager.spawnNearbyBits(userLocation.lat, userLocation.lng);
+  }
+  if (poiManager) {
+    poiManager.fetchNearbyPOIs(userLocation.lat, userLocation.lng);
+  }
 
   // Handle responsive resizing (e.g. Chrome DevTools Device Mode toggle)
   window.addEventListener('resize', () => {
@@ -638,6 +683,14 @@ function handlePositionChange(lat, lng) {
   }
 
   updateHexGrid(lat, lng);
+
+  if (dataBitsManager) {
+    dataBitsManager.spawnNearbyBits(lat, lng);
+    dataBitsManager.update(lat, lng);
+  }
+  if (poiManager) {
+    poiManager.fetchNearbyPOIs(lat, lng);
+  }
 }
 
 function updateHudTagCount(hexId) {
@@ -648,6 +701,7 @@ function updateHudTagCount(hexId) {
 // --- 7. GAME LOOP ---
 setInterval(() => {
   if (droneManager) droneManager.update(1);
+  if (dataBitsManager) dataBitsManager.update(userLocation.lat, userLocation.lng);
   if (!currentHexId) return;
 
   const captured = capturedHexes.get(currentHexId);
@@ -708,7 +762,13 @@ async function completeCapture(hexId) {
     console.log('[hexTag] Offline Capture Sync:', e);
   }
 
-  addXP(50, '🎉 WABE EROBERT!');
+  if (dataBitsManager) {
+    dataBitsManager.totalBits = Math.min(dataBitsManager.maxBitsCapacity, dataBitsManager.totalBits + 25);
+    dataBitsManager.saveBitsCount();
+    if (dataBitsDisplay) dataBitsDisplay.textContent = `💎 ${dataBitsManager.totalBits}`;
+  }
+
+  addXP(50, '🎉 WABE EROBERT! (+25 💎 Bits)');
   updateHexGrid(userLocation.lat, userLocation.lng);
   renderProfileTerritory();
 }
@@ -995,4 +1055,93 @@ function showToast(msg) {
   toast.textContent = msg;
   toast.classList.add('show');
   setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+// --- 12. POI NODE CONTROL & TOWER DEFENSE ---
+function openNodeControlModal(poi, fort) {
+  activeSelectedPoi = poi;
+  const currentFort = poiManager ? poiManager.getFortification(poi.id) : (fort || {});
+  const isHexOwned = capturedHexes.has(poi.hexId);
+  const zone = capturedHexes.get(poi.hexId);
+  const ownerName = zone ? zone.owner : 'NIEMAND';
+  const dist = poiManager ? poiManager.getDistanceMeters(userLocation.lat, userLocation.lng, poi.lat, poi.lng) : 0;
+
+  if (nodeModalTitle) nodeModalTitle.textContent = `${poi.icon} ${poi.category}`;
+  if (nodeModalName) nodeModalName.textContent = poi.name;
+  if (nodeModalTypeIcon) nodeModalTypeIcon.textContent = poi.icon;
+  if (nodeModalTypeTag) nodeModalTypeTag.textContent = poi.category;
+  if (nodeModalHex) nodeModalHex.textContent = `WABE: #${poi.hexId.slice(-6).toUpperCase()}`;
+  if (nodeModalDistance) nodeModalDistance.textContent = `📍 ${Math.round(dist)}m`;
+
+  if (nodeOwnerText) {
+    nodeOwnerText.textContent = isHexOwned ? `BESETZT VON ${ownerName.toUpperCase()}` : 'FREIER KNOTEN';
+    nodeOwnerText.style.color = zone ? zone.color : 'var(--user-color)';
+  }
+  if (nodeShieldText) nodeShieldText.textContent = `${currentFort.shieldHp || 0} / 100 HP`;
+  if (nodeTurretLevel) nodeTurretLevel.textContent = currentFort.turretLevel > 0 ? `LVL ${currentFort.turretLevel} (AKTIV)` : 'LVL 0 (AUS)';
+
+  if (nodeModal) nodeModal.classList.add('active');
+}
+
+if (btnCloseNodeModal) {
+  btnCloseNodeModal.addEventListener('click', () => {
+    if (nodeModal) nodeModal.classList.remove('active');
+  });
+}
+
+if (btnUpgradeTurret) {
+  btnUpgradeTurret.addEventListener('click', () => {
+    if (!activeSelectedPoi || !dataBitsManager || !poiManager) return;
+    const cost = 50;
+    if (!dataBitsManager.spendBits(cost)) {
+      showToast('⚠️ Nicht genug Energy Bits! (Benötigt 50 💎)');
+      return;
+    }
+    const cur = poiManager.getFortification(activeSelectedPoi.id);
+    const newLvl = Math.min(3, (cur.turretLevel || 0) + 1);
+    poiManager.setFortification(activeSelectedPoi.id, {
+      turretLevel: newLvl,
+      color: userColor,
+      owner: currentUser?.username || 'Tagger'
+    });
+    openNodeControlModal(activeSelectedPoi);
+    showToast(`⚡ EMP-TURRET AUF LEVEL ${newLvl} VERSTÄRKT! (-50 💎)`);
+  });
+}
+
+if (btnUpgradeShield) {
+  btnUpgradeShield.addEventListener('click', () => {
+    if (!activeSelectedPoi || !dataBitsManager || !poiManager) return;
+    const cost = 40;
+    if (!dataBitsManager.spendBits(cost)) {
+      showToast('⚠️ Nicht genug Energy Bits! (Benötigt 40 💎)');
+      return;
+    }
+    poiManager.setFortification(activeSelectedPoi.id, {
+      shieldHp: 100,
+      color: userColor,
+      owner: currentUser?.username || 'Tagger'
+    });
+    openNodeControlModal(activeSelectedPoi);
+    showToast(`🛡️ PLASMA-SCHUTZSCHILD AKTIVIERT (100 HP)! (-40 💎)`);
+  });
+}
+
+if (btnUpgradeBeacon) {
+  btnUpgradeBeacon.addEventListener('click', () => {
+    if (!activeSelectedPoi || !dataBitsManager || !poiManager) return;
+    const cost = 60;
+    if (!dataBitsManager.spendBits(cost)) {
+      showToast('⚠️ Nicht genug Energy Bits! (Benötigt 60 💎)');
+      return;
+    }
+    poiManager.setFortification(activeSelectedPoi.id, {
+      beaconActive: true,
+      color: userColor,
+      owner: currentUser?.username || 'Tagger'
+    });
+    addXP(100, '📡 SIGNAL-BEACON AKTIVIERT');
+    openNodeControlModal(activeSelectedPoi);
+    showToast(`📡 SIGNAL-BEACON ONLINE! (+100 XP, -60 💎)`);
+  });
 }

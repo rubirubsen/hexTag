@@ -1318,3 +1318,241 @@ body, html {
 .toast-banner.show {
   top: 24px;
 }
+
+/* Energy Bits Badge */
+.bits-badge {
+  text-align: right;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0px;
+  min-width: 80px;
+}
+
+.bits-badge .stat-value {
+  color: #00f0ff;
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+}
+
+/* OSM POI Map Marker */
+.poi-map-marker {
+  cursor: pointer;
+  z-index: 5;
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.poi-map-marker:hover, .poi-map-marker:active {
+  transform: scale(1.18);
+  z-index: 10;
+}
+
+.poi-marker-badge {
+  background: rgba(13, 18, 29, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1.5px solid var(--poi-color, #ff8000);
+  box-shadow: 0 0 14px var(--poi-color, #ff8000), inset 0 0 8px rgba(255, 255, 255, 0.1);
+  padding: 4px 8px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 800;
+  color: #ffffff;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+.poi-marker-badge.fortified {
+  box-shadow: 0 0 20px #ffe600, inset 0 0 10px rgba(255, 230, 0, 0.3);
+  border-color: #ffe600;
+}
+
+.poi-marker-icon {
+  font-size: 14px;
+}
+
+.poi-turret-tag {
+  background: rgba(255, 230, 0, 0.2);
+  color: #ffe600;
+  border: 1px solid #ffe600;
+  padding: 1px 4px;
+  border-radius: 6px;
+  font-size: 8px;
+}
+
+.poi-shield-tag {
+  font-size: 10px;
+  animation: pulse-glow 1.5s infinite;
+}
+
+/* POI Node Defense Modal */
+.node-panel {
+  max-width: 440px;
+  width: 94%;
+}
+
+.node-modal-content {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.node-hero-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.node-type-icon {
+  font-size: 32px;
+  width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.node-hero-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.node-hero-info h3 {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.node-type-tag {
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--accent-cyan);
+  letter-spacing: 0.8px;
+}
+
+.node-coords-row {
+  display: flex;
+  gap: 10px;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.node-defense-status {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.defense-stat-box {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 8px 6px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.def-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-dim);
+  letter-spacing: 0.5px;
+}
+
+.defense-stat-box strong {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.node-upgrades-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.upgrade-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 10px 12px;
+  gap: 10px;
+  transition: all 0.2s ease;
+}
+
+.upgrade-card:hover {
+  background: rgba(255, 128, 0, 0.08);
+  border-color: rgba(255, 128, 0, 0.3);
+}
+
+.upgrade-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.upgrade-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.upgrade-info strong {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.upgrade-info small {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.upgrade-action-btn {
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(255, 128, 0, 0.2));
+  border: 1px solid #00f0ff;
+  color: #ffffff;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.upgrade-action-btn:hover, .upgrade-action-btn:active {
+  background: #00f0ff;
+  color: #000000;
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.6);
+  transform: scale(1.04);
+}
