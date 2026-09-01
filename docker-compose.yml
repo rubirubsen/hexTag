@@ -8,7 +8,33 @@ services:
     container_name: hextag-web
     restart: unless-stopped
     ports:
-      # Format: "HOST_PORT:CONTAINER_PORT"
-      - "${HEXTAG_PORT:-8480}:80"
+      - "${HEXTAG_PORT:-8480}:8480"
     environment:
       - NODE_ENV=production
+      - PORT=8480
+      - APP_URL=${APP_URL:-http://localhost:8480}
+      - JWT_SECRET=${JWT_SECRET:-hextag_cyber_secret_key_998877}
+      
+      # MSSQL Datenbank Konfiguration
+      - DB_SERVER=${DB_SERVER:-localhost}
+      - DB_PORT=${DB_PORT:-1433}
+      - DB_DATABASE=${DB_DATABASE:-hexTagDB}
+      - DB_USER=${DB_USER:-sa}
+      - DB_PASSWORD=${DB_PASSWORD:-}
+      - DB_ENCRYPT=${DB_ENCRYPT:-false}
+      - DB_TRUST_CERT=${DB_TRUST_CERT:-true}
+
+      # SSO: Google
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL:-}
+
+      # SSO: Twitch
+      - TWITCH_CLIENT_ID=${TWITCH_CLIENT_ID:-}
+      - TWITCH_CLIENT_SECRET=${TWITCH_CLIENT_SECRET:-}
+      - TWITCH_CALLBACK_URL=${TWITCH_CALLBACK_URL:-}
+
+      # SSO: Discord
+      - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID:-}
+      - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:-}
+      - DISCORD_CALLBACK_URL=${DISCORD_CALLBACK_URL:-}

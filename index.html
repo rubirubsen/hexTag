@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="./src/style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com">
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -19,10 +19,10 @@
 
   <!-- Top HUD: Game Stats -->
   <header class="hud-header">
-    <div class="hud-card player-badge">
+    <div class="hud-card player-badge" id="btnOpenAuthModal" title="Klicke für Profil & Login">
       <div class="color-dot" id="userColorDot" title="Spielerfarbe"></div>
       <div class="player-info">
-        <span class="player-tag" id="playerName">TAGGER_01</span>
+        <span class="player-tag" id="playerName">LOGIN ❯</span>
         <span class="player-status" id="gpsStatus">GPS: WIRD ERMITTELT...</span>
       </div>
     </div>
@@ -56,7 +56,7 @@
     </div>
   </div>
 
-  <!-- DESKTOP STATIONARY COMMAND CENTER (Sichtbar auf Desktop-Bildschirmen) -->
+  <!-- DESKTOP STATIONARY COMMAND CENTER -->
   <aside class="desktop-command-panel" id="desktopCommandPanel">
     <div class="cmd-header">
       <div class="cmd-title">
@@ -153,7 +153,57 @@
     </button>
   </nav>
 
-  <!-- SPRAY PAINT MODAL (FreeDraw Canvas) -->
+  <!-- SSO & PROFILE LOGIN MODAL -->
+  <div class="modal-backdrop" id="authModal">
+    <div class="spray-panel auth-panel">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span>SPIELER-PROFIL & SSO</span>
+          <small>MSSQL Cloud-Synchronisation</small>
+        </div>
+        <button class="close-modal-btn" id="btnCloseAuthModal">✕</button>
+      </div>
+
+      <div class="auth-content">
+        <div id="loggedOutView">
+          <p class="auth-desc">Melde dich an, um deine Waben, XP und Graffitis plattformübergreifend in der MSSQL-Datenbank zu sichern.</p>
+          
+          <div class="sso-buttons">
+            <a href="/api/auth/google" class="sso-btn sso-google">
+              <span>🌐 Mit Google anmelden</span>
+            </a>
+            <a href="/api/auth/twitch" class="sso-btn sso-twitch">
+              <span>🟣 Mit Twitch anmelden</span>
+            </a>
+            <a href="/api/auth/discord" class="sso-btn sso-discord">
+              <span>💬 Mit Discord anmelden</span>
+            </a>
+          </div>
+
+          <div class="auth-divider"><span>ODER</span></div>
+
+          <div class="guest-login-box">
+            <input type="text" id="guestUsernameInput" placeholder="Dein Tagger-Name (z.B. CyberGhost)" maxlength="20" />
+            <button class="action-btn primary-spray-btn" id="btnGuestLogin">ALS GAST STARTEN</button>
+          </div>
+        </div>
+
+        <div id="loggedInView" style="display: none;">
+          <div class="profile-card">
+            <img id="profileAvatar" src="" alt="Avatar" class="profile-avatar" />
+            <div class="profile-details">
+              <strong id="profileUsername">Spielername</strong>
+              <span id="profileProvider" class="provider-badge">SSO</span>
+              <span id="profileXp" class="profile-xp">0 XP</span>
+            </div>
+          </div>
+          <button class="action-btn" id="btnLogout" style="margin-top: 14px; width: 100%; border-color: #ff0055; color: #ff0055;">ABMELDEN</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SPRAY PAINT MODAL -->
   <div class="modal-backdrop" id="sprayModal">
     <div class="spray-panel">
       <div class="modal-header">
@@ -168,7 +218,6 @@
         <canvas id="sprayCanvas"></canvas>
       </div>
 
-      <!-- Spray Tools & Brushes -->
       <div class="spray-controls">
         <div class="brush-modes">
           <button class="tool-btn active" data-mode="spray" id="toolSpray">SPRAY</button>

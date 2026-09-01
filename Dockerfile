@@ -1,4 +1,4 @@
-# Stage 1: Build Frontend
+# Multi-Stage Node.js Fullstack Server (Express API + MSSQL + Vite Static Frontend)
 FROM node:20-alpine AS builder
 
 WORKDIR /app
@@ -7,19 +7,24 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# Source-Code kopieren und bauen
+# Source-Code kopieren und Frontend bauen
 COPY . .
 RUN npm run build
 
-# Stage 2: Production Nginx Server
-FROM nginx:alpine
+# Stage 2: Production Node.js Server
+FROM node:20-alpine
 
-# Eigene Nginx-Konfiguration fuer SPA kopieren
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+WORKDIR /app
 
-# Gebautes Frontend aus Stage 1 kopieren
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY package.json package-lock.json ./
+RUN npm ci --only=production
 
-EXPOSE 80
+# Server-Code und gebautes Frontend kopieren
+COPY server/ ./server/
+COPY --from=builder /app/dist ./dist
 
-CMD ["nginx", "-g", "daemon off;"]
+EXPOSE 8480
+ENV PORT=8480
+ENV NODE_ENV=production
+
+CMD ["node", "server/index.js"]

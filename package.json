@@ -1,16 +1,24 @@
 {
   "name": "hextag-web",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host",
+    "dev:server": "node server/index.js",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "node server/index.js"
   },
   "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
     "h3-js": "^4.1.0",
-    "maplibre-gl": "^4.7.1"
+    "jsonwebtoken": "^9.0.2",
+    "maplibre-gl": "^4.7.1",
+    "mssql": "^11.0.1"
   },
   "devDependencies": {
     "vite": "^5.4.10"

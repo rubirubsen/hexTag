@@ -17,11 +17,14 @@ const SAVED_COLOR_KEY = 'hextag_user_color';
 let userColor = localStorage.getItem(SAVED_COLOR_KEY) || '#ff8000';
 document.documentElement.style.setProperty('--user-color', userColor);
 
+// Current User Auth State
+let currentUser = null;
+
 // State
 let userLocation = { lat: 52.520008, lng: 13.404954 };
 let currentHexId = null;
 let captureSeconds = 0;
-let totalXp = 50; // Start-XP fuer erste Drohnentests
+let totalXp = 50;
 let isSimulating = false;
 let isFollowingUser = true;
 let watchId = null;
@@ -40,6 +43,7 @@ const totalXpDisplay = document.getElementById('totalXpDisplay');
 const gpsStatus = document.getElementById('gpsStatus');
 const toast = document.getElementById('toast');
 const userColorDot = document.getElementById('userColorDot');
+const playerName = document.getElementById('playerName');
 
 // Desktop HQ & Drone Elements
 const hqTimerVal = document.getElementById('hqTimerVal');
@@ -59,11 +63,99 @@ const galleryModal = document.getElementById('galleryModal');
 const galleryHexLabel = document.getElementById('galleryHexLabel');
 const galleryGrid = document.getElementById('galleryGrid');
 
+// Auth Modal
+const authModal = document.getElementById('authModal');
+const btnOpenAuthModal = document.getElementById('btnOpenAuthModal');
+const btnCloseAuthModal = document.getElementById('btnCloseAuthModal');
+const loggedOutView = document.getElementById('loggedOutView');
+const loggedInView = document.getElementById('loggedInView');
+const profileAvatar = document.getElementById('profileAvatar');
+const profileUsername = document.getElementById('profileUsername');
+const profileProvider = document.getElementById('profileProvider');
+const profileXp = document.getElementById('profileXp');
+const btnGuestLogin = document.getElementById('btnGuestLogin');
+const guestUsernameInput = document.getElementById('guestUsernameInput');
+const btnLogout = document.getElementById('btnLogout');
+
 totalXpDisplay.textContent = totalXp;
 userColorDot.style.background = userColor;
 userColorDot.style.boxShadow = `0 0 12px ${userColor}`;
 
-// --- 1. INITIALIZE CANVAS & AR VIEWER ---
+// --- 1. AUTH & SSO PROFILE SYSTEM ---
+async function checkAuthStatus() {
+  try {
+    const res = await fetch('/api/auth/me');
+    const data = await res.json();
+    if (data.authenticated && data.user) {
+      setLoggedInUser(data.user);
+    } else {
+      setLoggedOut();
+    }
+  } catch (e) {
+    console.log('[Auth] API im Offline/Standalone Modus:', e);
+    setLoggedOut();
+  }
+}
+
+function setLoggedInUser(user) {
+  currentUser = user;
+  playerName.textContent = user.username.toUpperCase();
+  userColor = user.color || userColor;
+  totalXp = user.xp || totalXp;
+  totalXpDisplay.textContent = totalXp;
+
+  loggedOutView.style.display = 'none';
+  loggedInView.style.display = 'block';
+
+  profileUsername.textContent = user.username;
+  profileAvatar.src = user.avatar_url || 'https://api.dicebear.com/7.x/bottts/svg?seed=' + user.username;
+  profileProvider.textContent = (user.sso_provider || 'SSO').toUpperCase();
+  profileXp.textContent = `${totalXp} XP • LEVEL ${user.level || 1}`;
+
+  showToast(`Willkommen zurück, ${user.username}!`);
+}
+
+function setLoggedOut() {
+  currentUser = null;
+  playerName.textContent = 'LOGIN ❯';
+  loggedOutView.style.display = 'block';
+  loggedInView.style.display = 'none';
+}
+
+btnOpenAuthModal.addEventListener('click', () => {
+  authModal.classList.add('active');
+});
+
+btnCloseAuthModal.addEventListener('click', () => {
+  authModal.classList.remove('active');
+});
+
+btnGuestLogin.addEventListener('click', async () => {
+  const customName = guestUsernameInput.value.trim();
+  try {
+    const res = await fetch('/api/auth/guest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: customName, color: userColor })
+    });
+    const data = await res.json();
+    if (data.success && data.user) {
+      setLoggedInUser(data.user);
+      authModal.classList.remove('active');
+    }
+  } catch (err) {
+    console.error(err);
+  }
+});
+
+btnLogout.addEventListener('click', async () => {
+  await fetch('/api/auth/logout');
+  setLoggedOut();
+  authModal.classList.remove('active');
+  showToast('Erfolgreich abgemeldet.');
+});
+
+// --- 2. INITIALIZE CANVAS & AR VIEWER ---
 const sprayCanvasEl = document.getElementById('sprayCanvas');
 let graffitiCanvas = null;
 
@@ -78,7 +170,7 @@ const arViewer = new ARViewer(arVideo, arContainer, () => {
   console.log('[hexTag] AR beendet.');
 });
 
-// --- 2. INITIALIZE MAP (OpenStreetMap - 100% Free & No Key) ---
+// --- 3. INITIALIZE MAP (OpenStreetMap - 100% Free & No Key) ---
 const map = new maplibregl.Map({
   container: 'map',
   style: {
@@ -113,11 +205,11 @@ const playerMarker = new maplibregl.Marker({ element: markerEl })
   .setLngLat([userLocation.lng, userLocation.lat])
   .addTo(map);
 
-// --- 3. DRONE & HQ MANAGER ---
+// --- 4. DRONE & HQ MANAGER ---
 let droneManager = null;
 
 map.on('load', () => {
-  console.log('[hexTag] Initialisiere Map & Drohnen-Manager...');
+  console.log('[hexTag] Initialisiere Map, SSO & MSSQL Sync...');
 
   droneManager = new DroneManager(map, handleDroneManagerUpdate);
 
@@ -147,12 +239,34 @@ map.on('load', () => {
     }
   });
 
+  checkAuthStatus();
+  fetchServerZones();
   updateHexGrid(userLocation.lat, userLocation.lng);
   startGeolocation();
   syncColorButtons();
 });
 
-// --- 4. H3 GRID & GEOJSON ---
+// Sync Zones with Backend
+async function fetchServerZones() {
+  try {
+    const res = await fetch('/api/zones');
+    if (res.ok) {
+      const zones = await res.json();
+      zones.forEach(z => {
+        capturedHexes.set(z.hex_id, {
+          owner: z.owner_name || 'Tagger',
+          color: z.color || '#ff8000',
+          capturedAt: z.captured_at
+        });
+      });
+      updateHexGrid(userLocation.lat, userLocation.lng);
+    }
+  } catch (e) {
+    console.log('[hexTag] Server-Zonen Offline:', e);
+  }
+}
+
+// --- 5. H3 GRID & GEOJSON ---
 function updateHexGrid(lat, lng) {
   try {
     const centerHex = h3.latLngToCell(lat, lng, H3_RESOLUTION);
@@ -165,13 +279,11 @@ function updateHexGrid(lat, lng) {
       const isCurrent = hex === currentHexId;
       const captured = capturedHexes.get(hex);
       const tagCount = tagStore.getTagCountForHex(hex);
-
-      // Pruefen, ob aktive Drohne in der Wabe ist
       const hasDrone = droneManager && droneManager.drones.some(d => d.targetHexId === hex);
 
       let fillColor = '#000000';
       let fillOpacity = 0.05;
-      let strokeColor = 'rgba(0, 240, 255, 0.2)';
+      let strokeColor = 'rgba(255, 128, 0, 0.25)';
       let strokeWidth = 1.5;
 
       if (captured) {
@@ -184,7 +296,7 @@ function updateHexGrid(lat, lng) {
       if (hasDrone) {
         fillColor = userColor;
         fillOpacity = 0.35;
-        strokeColor = '#00f0ff';
+        strokeColor = '#ff8000';
         strokeWidth = 3;
       }
 
@@ -228,7 +340,7 @@ function updateHexGrid(lat, lng) {
   }
 }
 
-// --- 5. GPS & STANDORTVERARBEITUNG ---
+// --- 6. GPS & TRACKING ---
 async function startGeolocation() {
   try {
     const ipRes = await fetch('https://ipapi.co/json/');
@@ -310,13 +422,9 @@ function updateHudTagCount(hexId) {
   hexTagCount.textContent = `🎨 ${count} Tag${count === 1 ? '' : 's'}`;
 }
 
-// --- 6. GAME LOOP (Sekundentakt) ---
+// --- 7. GAME LOOP ---
 setInterval(() => {
-  // Drone & HQ Update
-  if (droneManager) {
-    droneManager.update(1);
-  }
-
+  if (droneManager) droneManager.update(1);
   if (!currentHexId) return;
 
   const captured = capturedHexes.get(currentHexId);
@@ -341,7 +449,7 @@ setInterval(() => {
     const min = Math.floor(remaining / 60);
     const sec = remaining % 60;
     timerDisplay.textContent = `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-    timerDisplay.style.color = 'var(--accent-cyan)';
+    timerDisplay.style.color = 'var(--accent-orange)';
     progressFillBar.style.width = `${(progress * 100).toFixed(1)}%`;
     captureStatusText.textContent = `Eroberung: ${(progress * 100).toFixed(0)}%`;
 
@@ -353,12 +461,25 @@ setInterval(() => {
   }
 }, 1000);
 
-function completeCapture(hexId) {
+async function completeCapture(hexId) {
+  const ownerName = currentUser ? currentUser.username : 'TAGGER_01';
+
   capturedHexes.set(hexId, {
-    owner: 'TAGGER_01',
+    owner: ownerName,
     color: userColor,
     capturedAt: Date.now()
   });
+
+  // Server-Sync
+  try {
+    await fetch('/api/zones/capture', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hexId, color: userColor, ownerName })
+    });
+  } catch (e) {
+    console.log('[hexTag] Offline Capture Sync:', e);
+  }
 
   totalXp += 50;
   totalXpDisplay.textContent = totalXp;
@@ -367,9 +488,8 @@ function completeCapture(hexId) {
   updateHexGrid(userLocation.lat, userLocation.lng);
 }
 
-// --- 7. DESKTOP HQ & DROHNEN LOGIK ---
+// --- 8. DESKTOP HQ & DROHNEN LOGIK ---
 function handleDroneManagerUpdate(data) {
-  // HQ UI
   if (data.hq) {
     hqTimerView.style.display = 'none';
     hqActiveView.style.display = 'block';
@@ -393,7 +513,6 @@ function handleDroneManagerUpdate(data) {
     }
   }
 
-  // Drohnen Counter
   activeDroneCount.textContent = `${data.activeDrones.length} AKTIV`;
 }
 
@@ -428,12 +547,11 @@ btnArmDrone.addEventListener('click', () => {
   }
 });
 
-// Map Click: Drohnen-Entsendung ODER Waben-Inspektion
+// Map Click
 map.on('click', (e) => {
   const clickedHex = h3.latLngToCell(e.lngLat.lat, e.lngLat.lng, H3_RESOLUTION);
   const [tLat, tLng] = h3.cellToLatLng(clickedHex);
 
-  // Drohne entsenden
   if (isTargetingDrone && droneManager) {
     isTargetingDrone = false;
     droneTargetHint.style.display = 'none';
@@ -450,7 +568,6 @@ map.on('click', (e) => {
       color: userColor
     });
 
-    // Drohne erobert Wabe waehrend des Einsatzes
     capturedHexes.set(clickedHex, {
       owner: 'DROHNE (HQ)',
       color: userColor,
@@ -462,7 +579,6 @@ map.on('click', (e) => {
     return;
   }
 
-  // Normaler Waben-Inspektor
   const captured = capturedHexes.get(clickedHex);
   const tagCount = tagStore.getTagCountForHex(clickedHex);
 
@@ -479,7 +595,7 @@ map.on('click', (e) => {
   }
 });
 
-// --- 8. SPRAY MODAL & GRAFFITI ---
+// --- 9. SPRAY MODAL & GRAFFITI ---
 btnOpenSprayModal.addEventListener('click', () => {
   if (!currentHexId) return;
   sprayModalHexLabel.textContent = `WABE: ${currentHexId.slice(-6).toUpperCase()}`;
@@ -509,18 +625,38 @@ brushSizeSlider.addEventListener('input', (e) => {
 btnUndoCanvas.addEventListener('click', () => graffitiCanvas && graffitiCanvas.undo());
 btnClearCanvas.addEventListener('click', () => graffitiCanvas && graffitiCanvas.clear());
 
-btnSubmitSpray.addEventListener('click', () => {
+btnSubmitSpray.addEventListener('click', async () => {
   if (!graffitiCanvas || !currentHexId) return;
 
   const imageBase64 = graffitiCanvas.exportDataURL();
+  const authorName = currentUser ? currentUser.username : 'TAGGER_01';
+
   tagStore.addTag({
     hexId: currentHexId,
     lat: userLocation.lat,
     lng: userLocation.lng,
-    author: 'TAGGER_01',
+    author: authorName,
     color: userColor,
     imageBase64
   });
+
+  // Server Tag Sync
+  try {
+    await fetch('/api/tags', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        hexId: currentHexId,
+        lat: userLocation.lat,
+        lng: userLocation.lng,
+        color: userColor,
+        imageBase64,
+        author: authorName
+      })
+    });
+  } catch (e) {
+    console.log('[hexTag] Offline Tag Sync:', e);
+  }
 
   totalXp += SPRAY_XP_REWARD;
   totalXpDisplay.textContent = totalXp;
@@ -531,7 +667,7 @@ btnSubmitSpray.addEventListener('click', () => {
   updateHexGrid(userLocation.lat, userLocation.lng);
 });
 
-// --- 9. GALLERY & AR ---
+// --- 10. GALLERY & AR ---
 btnOpenHexGallery.addEventListener('click', () => {
   if (!currentHexId) return;
   openGalleryForHex(currentHexId);
@@ -553,10 +689,10 @@ function openGalleryForHex(hexId) {
       const card = document.createElement('div');
       card.className = 'gallery-card';
       card.innerHTML = `
-        <img src="${t.imageBase64}" alt="Tag" />
+        <img src="${t.imageBase64 || t.image_data}" alt="Tag" />
         <div class="gallery-card-meta">
           <span style="color: ${t.color}; font-weight: bold;">${t.author}</span>
-          <span>${new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+          <span>${new Date(t.timestamp || t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
         </div>
       `;
       galleryGrid.appendChild(card);
@@ -574,7 +710,7 @@ btnToggleAR.addEventListener('click', () => {
 
 btnCloseAR.addEventListener('click', () => arViewer.stop());
 
-// --- 10. COLOR PICKER & HELPERS ---
+// --- 11. COLOR PICKER & HELPERS ---
 function syncColorButtons() {
   document.querySelectorAll('.color-btn').forEach(btn => {
     if (btn.dataset.color === userColor) {
@@ -598,7 +734,7 @@ document.querySelectorAll('.color-btn').forEach(btn => {
 
     if (graffitiCanvas) graffitiCanvas.setBrushColor(userColor);
     updateHexGrid(userLocation.lat, userLocation.lng);
-    showToast(`Farbe gewählt: ${btn.title}`);
+    showToast(`Farbe: ${btn.title}`);
   });
 });
 
