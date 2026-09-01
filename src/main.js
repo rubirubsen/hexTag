@@ -198,13 +198,56 @@ function updateHexGrid(lat, lng) {
   }
 }
 
-// --- 5. GPS & STANDORT ---
-function startGeolocation() {
+// --- 5. GPS & STANDORTVERARBEITUNG ---
+async function startGeolocation() {
+  // 1. Initialer IP-Lookup (sofortige echte Stadt statt starr Berlin, falls HTTP/GPS noch blockiert ist)
+  try {
+    const ipRes = await fetch('https://ipapi.co/json/');
+    if (ipRes.ok) {
+      const ipData = await ipRes.json();
+      if (ipData.latitude && ipData.longitude && !isSimulating) {
+        userLocation = { lat: ipData.latitude, lng: ipData.longitude };
+        map.setCenter([userLocation.lng, userLocation.lat]);
+        playerMarker.setLngLat([userLocation.lng, userLocation.lat]);
+        handlePositionChange(userLocation.lat, userLocation.lng);
+        gpsStatus.textContent = `STANDORT: ${ipData.city || 'ERMITTELT'}`;
+      }
+    }
+  } catch (e) {
+    console.log('[hexTag] IP-Lookup uebersprungen:', e);
+  }
+
+  // 2. Echtes Geraete-GPS anfordern
   if (!navigator.geolocation) {
-    gpsStatus.textContent = 'GPS: SIMULATION AKTIV';
+    gpsStatus.textContent = 'GPS: NICHT UNTERSTÜTZT';
     return;
   }
 
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude, longitude, accuracy } = pos.coords;
+      userLocation = { lat: latitude, lng: longitude };
+      isSimulating = false;
+
+      playerMarker.setLngLat([longitude, latitude]);
+      map.flyTo({ center: [longitude, latitude], zoom: 17, speed: 1.5 });
+      gpsStatus.textContent = `GPS: ±${Math.round(accuracy)}m`;
+      handlePositionChange(latitude, longitude);
+      showToast('🛰️ ECHTER GPS-STANDORT AKTIV!');
+    },
+    (err) => {
+      console.warn('[hexTag] GPS-Fehler:', err.message);
+      if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        gpsStatus.textContent = 'GPS: HTTPS ERFORDERLICH';
+        showToast('⚠️ Hinweis: Browser erlauben GPS nur über HTTPS oder Domain!');
+      } else {
+        gpsStatus.textContent = 'GPS: BITTE FREIGEBEN';
+      }
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+  );
+
+  // Kontinuierliches GPS-Tracking
   navigator.geolocation.watchPosition(
     (pos) => {
       if (isSimulating) return;
@@ -218,9 +261,7 @@ function startGeolocation() {
       handlePositionChange(latitude, longitude);
     },
     (err) => {
-      console.warn('[hexTag] GPS-Fallback:', err.message);
-      gpsStatus.textContent = 'GPS: SIMULATION AKTIV';
-      handlePositionChange(userLocation.lat, userLocation.lng);
+      console.warn('[hexTag] WatchPosition Fallback:', err.message);
     },
     { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
   );
@@ -436,7 +477,26 @@ document.querySelectorAll('.color-btn').forEach(btn => {
 });
 
 document.getElementById('btnCenterMap').addEventListener('click', () => {
-  map.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 17, speed: 1.5 });
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        isSimulating = false;
+        userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        playerMarker.setLngLat([userLocation.lng, userLocation.lat]);
+        map.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 17, speed: 1.5 });
+        handlePositionChange(userLocation.lat, userLocation.lng);
+        gpsStatus.textContent = `GPS: ±${Math.round(pos.coords.accuracy)}m`;
+        showToast('🛰️ GPS ZENTRIERT!');
+      },
+      (err) => {
+        map.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 17, speed: 1.5 });
+        showToast('GPS nicht freigegeben (Zentriere auf Karte)');
+      },
+      { enableHighAccuracy: true, timeout: 5000 }
+    );
+  } else {
+    map.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 17, speed: 1.5 });
+  }
 });
 
 document.getElementById('btnSimulateMove').addEventListener('click', () => {
