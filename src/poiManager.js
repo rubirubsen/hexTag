@@ -109,7 +109,7 @@ export class PoiManager {
           return { ...existing.poiData, id: poiId };
         }
 
-        const { type, icon, category } = this.categorizeAddress(data);
+        const { type, icon, category, isDataDispenser } = this.categorizeAddress(data);
 
         const pointData = {
           id: poiId,
@@ -122,6 +122,7 @@ export class PoiManager {
           icon,
           category,
           type,
+          isDataDispenser,
           fullAddress: data.display_name
         };
 
@@ -143,6 +144,7 @@ export class PoiManager {
       icon: '🏢',
       category: 'GEBÄUDE-KOMPLEX',
       type: 'building',
+      isDataDispenser: false,
       fullAddress: `Waben-Koordinate (${lat.toFixed(4)}, ${lng.toFixed(4)})`
     };
   }
@@ -153,26 +155,26 @@ export class PoiManager {
     const cat = data.category || '';
     const type = data.type || '';
 
-    if (cat === 'historic' || cat === 'tourism' || type === 'attraction' || type === 'monument') {
-      return { type: 'monument', icon: '🏛️', category: 'HISTORISCHES DENKMAL' };
+    if (cat === 'power' || cat === 'telecom') {
+      return { type: 'telecom', icon: '⚡', category: 'ENERGIE & NETZWERK-NODE', isDataDispenser: true };
     }
     if (addr.amenity === 'cafe' || addr.amenity === 'bar' || addr.amenity === 'restaurant' || type === 'pub') {
-      return { type: 'cafe', icon: '☕', category: 'STREET-HUB & CAFÉ' };
+      return { type: 'cafe', icon: '☕', category: 'CYBER-CAFÉ & DATA-HUB', isDataDispenser: true };
     }
     if (addr.railway || type === 'station' || type === 'subway') {
-      return { type: 'station', icon: '🚉', category: 'TRANSIT-KNOTENPUNKT' };
+      return { type: 'station', icon: '🚉', category: 'TRANSIT-DATENKNOTEN', isDataDispenser: true };
+    }
+    if (cat === 'historic' || cat === 'tourism' || type === 'attraction' || type === 'monument') {
+      return { type: 'monument', icon: '🏛️', category: 'HISTORISCHER DATA-BEACON', isDataDispenser: true };
     }
     if (addr.amenity === 'library' || addr.amenity === 'university' || addr.amenity === 'townhall') {
-      return { type: 'library', icon: '🏢', category: 'ÖFFENTLICHES GEBÄUDE' };
+      return { type: 'library', icon: '🏢', category: 'ÖFFENTLICHES ARCHIV', isDataDispenser: true };
     }
     if (addr.amenity === 'bank' || addr.shop) {
-      return { type: 'shop', icon: '🏦', category: 'HANDELS-ZENTRUM' };
-    }
-    if (cat === 'power' || cat === 'telecom') {
-      return { type: 'telecom', icon: '⚡', category: 'ENERGIE & NETZWERK' };
+      return { type: 'shop', icon: '🏦', category: 'HANDELS-ZENTRUM', isDataDispenser: false };
     }
 
-    return { type: 'building', icon: '🏢', category: 'WOHN- & GEWERBEBAU' };
+    return { type: 'building', icon: '🏢', category: 'WOHN- & GEWERBEBAU', isDataDispenser: false };
   }
 
   renderExistingFortifiedMarkers() {

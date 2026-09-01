@@ -1,11 +1,12 @@
 /**
- * DataBitsManager (Ingress-style XM & Cyber Energy Collection with flying vacuum physics)
+ * DataBitsManager (High-density Ingress-style XM & Cyber Energy Collection)
+ * 1 Bit = 1 Bit. High particle density with magnetic vacuum physics and OSM building fountains.
  */
 import * as h3 from 'h3-js';
 
 const DATA_BITS_STORAGE_KEY = 'hextag_data_bits';
-const PICKUP_RADIUS_METERS = 28; // Distance to absorb
-const VACUUM_MAGNET_RADIUS = 75; // Distance where orbs start flying toward player
+const PICKUP_RADIUS_METERS = 24; // Distance to vacuum absorb
+const VACUUM_MAGNET_RADIUS = 68; // Distance where shards start flying toward player
 
 export class DataBitsManager {
   constructor(map, onBitsUpdate) {
@@ -13,8 +14,9 @@ export class DataBitsManager {
     this.onBitsUpdate = onBitsUpdate;
     this.bits = [];
     this.totalBits = this.loadBitsCount();
-    this.maxBitsCapacity = 1000;
+    this.maxBitsCapacity = 2500;
     this.currentCenterHex = null;
+    this.activeFountains = new Set();
 
     this.initSourceAndLayers();
   }
@@ -45,7 +47,7 @@ export class DataBitsManager {
         data: { type: 'FeatureCollection', features: [] }
       });
 
-      // Outer Pulsing Neon Glow
+      // Outer Pulsing Neon Glow (Small & Sharp)
       this.map.addLayer({
         id: 'data-bits-glow',
         type: 'circle',
@@ -53,12 +55,12 @@ export class DataBitsManager {
         paint: {
           'circle-radius': ['get', 'glowRadius'],
           'circle-color': ['get', 'color'],
-          'circle-opacity': 0.65,
-          'circle-blur': 0.5
+          'circle-opacity': 0.75,
+          'circle-blur': 0.6
         }
       });
 
-      // Inner Diamond Core
+      // Inner Pixel Diamond Core (Crisp & Bitsig)
       this.map.addLayer({
         id: 'data-bits-core',
         type: 'circle',
@@ -67,7 +69,7 @@ export class DataBitsManager {
           'circle-radius': ['get', 'coreRadius'],
           'circle-color': '#ffffff',
           'circle-opacity': 1.0,
-          'circle-stroke-width': 2.5,
+          'circle-stroke-width': 1.5,
           'circle-stroke-color': ['get', 'color']
         }
       });
@@ -75,39 +77,38 @@ export class DataBitsManager {
   }
 
   /**
-   * Spawns Data Bits in nearby hexes around user location
+   * Spawns a high-density field of individual 1-Bit shards in nearby hexes
    */
   spawnNearbyBits(lat, lng) {
     const centerHex = h3.latLngToCell(lat, lng, 10);
-    if (this.currentCenterHex === centerHex && this.bits.length >= 20) {
+    if (this.currentCenterHex === centerHex && this.bits.length >= 60) {
       return;
     }
     this.currentCenterHex = centerHex;
 
     const nearbyHexes = h3.gridDisk(centerHex, 3);
     const newBits = [];
-    const colors = ['#00f0ff', '#ff8000', '#39ff14', '#ffe600', '#ff0055'];
+    const colors = ['#00f0ff', '#39ff14', '#ffe600', '#ff007f', '#00ffa3'];
 
     nearbyHexes.forEach((hex, hexIdx) => {
-      // 3 - 5 bits per hex
-      const count = (hexIdx % 3) + 3;
+      // 8 - 14 individual 1-Bits per hex cell
+      const count = 8 + (hexIdx % 7);
       const boundary = h3.cellToBoundary(hex);
 
       for (let i = 0; i < count; i++) {
         const rndVertex = boundary[i % boundary.length];
-        const offsetLat = (Math.random() - 0.5) * 0.0005;
-        const offsetLng = (Math.random() - 0.5) * 0.0007;
+        const offsetLat = (Math.random() - 0.5) * 0.00065;
+        const offsetLng = (Math.random() - 0.5) * 0.00085;
 
         const bLat = rndVertex[0] + offsetLat;
         const bLng = rndVertex[1] + offsetLng;
-        const value = Math.floor(Math.random() * 5) + 5; // 5 to 10 bits per shard
-        const color = colors[(hexIdx + i) % colors.length];
+        const color = colors[(hexIdx * 3 + i) % colors.length];
 
         newBits.push({
-          id: `bit_${hex}_${i}_${Date.now().toString(36)}`,
+          id: `bit_${hex}_${i}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
           lat: bLat,
           lng: bLng,
-          value,
+          value: 1, // Exactly 1 Bit per shard!
           color,
           hexId: hex,
           isCollected: false,
@@ -117,7 +118,40 @@ export class DataBitsManager {
     });
 
     const existing = this.bits.filter(b => !b.isCollected);
-    this.bits = [...existing, ...newBits].slice(0, 70);
+    this.bits = [...existing, ...newBits].slice(0, 220);
+    this.updateGeoJSON();
+  }
+
+  /**
+   * Spawns a concentrated Bit-Fountain ring around special OSM buildings (Cafés, Stations, Telecom, Monuments)
+   */
+  spawnBuildingFountain(poiLat, poiLng, count = 16) {
+    const fountainKey = `${poiLat.toFixed(4)}_${poiLng.toFixed(4)}`;
+    if (this.activeFountains.has(fountainKey)) return;
+    this.activeFountains.add(fountainKey);
+
+    const colors = ['#00f0ff', '#ffe600', '#39ff14', '#ff0055'];
+    const newBits = [];
+
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2;
+      const radius = 0.00025 + (Math.random() - 0.5) * 0.0001; // ~25m ring
+      const bLat = poiLat + Math.sin(angle) * radius;
+      const bLng = poiLng + Math.cos(angle) * radius;
+
+      newBits.push({
+        id: `fountain_${fountainKey}_${i}`,
+        lat: bLat,
+        lng: bLng,
+        value: 1,
+        color: colors[i % colors.length],
+        isCollected: false,
+        animOffset: Math.random() * Math.PI * 2
+      });
+    }
+
+    const existing = this.bits.filter(b => !b.isCollected);
+    this.bits = [...existing, ...newBits].slice(0, 250);
     this.updateGeoJSON();
   }
 
@@ -145,10 +179,10 @@ export class DataBitsManager {
         this.bits.splice(i, 1);
         needsRedraw = true;
       }
-      // Magnet Pull: Float towards player!
+      // Magnet Pull: Float smoothly towards player!
       else if (dist <= VACUUM_MAGNET_RADIUS) {
-        bit.lat += (userLat - bit.lat) * 0.22;
-        bit.lng += (userLng - bit.lng) * 0.22;
+        bit.lat += (userLat - bit.lat) * 0.25;
+        bit.lng += (userLng - bit.lng) * 0.25;
         needsRedraw = true;
       }
     }
@@ -191,17 +225,17 @@ export class DataBitsManager {
     const source = this.map.getSource('data-bits-source');
     if (!source) return;
 
-    const time = Date.now() / 400;
+    const time = Date.now() / 350;
     const features = this.bits.map(b => {
-      const pulse = Math.sin(time + b.animOffset) * 3;
+      const pulse = Math.sin(time + b.animOffset) * 1.5;
       return {
         type: 'Feature',
         properties: {
           id: b.id,
           color: b.color,
           value: b.value,
-          glowRadius: 14 + pulse,
-          coreRadius: 6 + pulse * 0.35
+          glowRadius: 5.5 + pulse,
+          coreRadius: 2.2 + pulse * 0.2
         },
         geometry: {
           type: 'Point',

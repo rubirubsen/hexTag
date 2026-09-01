@@ -1161,10 +1161,19 @@ function openNodeControlModal(poi, fort) {
   if (nodeShieldText) nodeShieldText.textContent = `${currentFort.shieldHp || 0} / 100 HP`;
   if (nodeTurretLevel) nodeTurretLevel.textContent = currentFort.turretLevel > 0 ? `LVL ${currentFort.turretLevel} (AKTIV)` : 'LVL 0 (AUS)';
 
+  // Data Fountain spawning for special building types
+  if (poi.isDataDispenser && dataBitsManager) {
+    dataBitsManager.spawnBuildingFountain(poi.lat, poi.lng, 16);
+  }
+
   // Show/Hide Buy Button vs Upgrade Options
   if (btnBuyBuilding) {
     btnBuyBuilding.style.display = isMine ? 'none' : 'block';
     btnBuyBuilding.textContent = isOwned ? '⚔️ GEBÄUDE ÜBERNEHMEN (100 💎 BITS)' : '🏢 DIESES GEBÄUDE KAUFEN (75 💎 BITS)';
+  }
+
+  if (btnNodeHackBits) {
+    btnNodeHackBits.style.display = poi.isDataDispenser ? 'block' : 'none';
   }
 
   if (nodeUpgradesSection) {
@@ -1172,6 +1181,36 @@ function openNodeControlModal(poi, fort) {
   }
 
   if (nodeModal) nodeModal.classList.add('active');
+}
+
+const btnNodeHackBits = document.getElementById('btnNodeHackBits');
+const nodeHackCooldowns = new Map();
+
+if (btnNodeHackBits) {
+  btnNodeHackBits.addEventListener('click', () => {
+    if (!activeSelectedPoi || !dataBitsManager) return;
+
+    const lastHack = nodeHackCooldowns.get(activeSelectedPoi.id) || 0;
+    const now = Date.now();
+    const cooldownMs = 2 * 60 * 1000; // 2 Minuten Cooldown
+
+    if (now - lastHack < cooldownMs) {
+      const remainingSec = Math.ceil((cooldownMs - (now - lastHack)) / 1000);
+      showToast(`⏳ Data-Extraktion lädt auf (${remainingSec}s verbleibend)!`);
+      return;
+    }
+
+    nodeHackCooldowns.set(activeSelectedPoi.id, now);
+    dataBitsManager.spawnBuildingFountain(activeSelectedPoi.lat, activeSelectedPoi.lng, 15);
+    dataBitsManager.totalBits = Math.min(dataBitsManager.maxBitsCapacity, dataBitsManager.totalBits + 15);
+    dataBitsManager.saveBitsCount();
+    if (dataBitsDisplay) dataBitsDisplay.textContent = `💎 ${dataBitsManager.totalBits}`;
+
+    soundEngine.playBitCollect();
+    spawnFloatingReward('+15 💎', '#00f0ff');
+    addXP(20, '⚡ DATA-EXTRAKTION ERFOLGREICH!');
+    showToast(`⚡ +15 💎 DATA BITS EXTRAHIERT! (+20 XP)`);
+  });
 }
 
 if (btnBuyBuilding) {

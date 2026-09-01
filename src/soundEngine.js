@@ -26,7 +26,7 @@ class SoundEngine {
     return this.isMuted;
   }
 
-  // Crystal Sweep for Data Bits pickup (Ingress XM style)
+  // High-pitch Crystal Chime for fast 1-Bit pickup streams (Arpeggio style)
   playBitCollect() {
     if (this.isMuted) return;
     this.init();
@@ -36,18 +36,22 @@ class SoundEngine {
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
 
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(880, now); // A5
-    osc.frequency.exponentialRampToValueAtTime(1760, now + 0.12); // A6
+    this.arpeggioIndex = ((this.arpeggioIndex || 0) + 1) % 6;
+    const pitches = [1046.5, 1174.6, 1318.5, 1567.9, 1760.0, 2093.0]; // C6, D6, E6, G6, A6, C7
+    const baseFreq = pitches[this.arpeggioIndex];
 
-    gain.gain.setValueAtTime(0.15, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(baseFreq, now);
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.35, now + 0.08);
+
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
 
     osc.connect(gain);
     gain.connect(this.ctx.destination);
 
     osc.start(now);
-    osc.stop(now + 0.15);
+    osc.stop(now + 0.09);
   }
 
   // Power-up Chord for Waben-Capture
