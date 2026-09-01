@@ -1132,10 +1132,6 @@ map.on('click', async (e) => {
 
 function openNodeControlModal(poi, fort) {
   activeSelectedPoi = poi;
-  const currentFort = poiManager ? poiManager.getFortification(poi.id) : (fort || {});
-  const isOwned = currentFort.isOwned || false;
-  const currentName = currentUser?.username || localStorage.getItem(SAVED_GUEST_NAME_KEY) || 'TAGGER_01';
-  const isMine = isOwned && currentFort.owner && currentFort.owner.toLowerCase() === currentName.toLowerCase();
   const dist = poiManager ? poiManager.getDistanceMeters(userLocation.lat, userLocation.lng, poi.lat, poi.lng) : 0;
 
   if (nodeModalTitle) nodeModalTitle.textContent = `${poi.icon || '🏢'} ${poi.category || 'KNOTENPUNKT'}`;
@@ -1145,16 +1141,32 @@ function openNodeControlModal(poi, fort) {
   if (nodeModalHex) nodeModalHex.textContent = `WABE: #${(poi.hexId || '000000').slice(-6).toUpperCase()}`;
   if (nodeModalDistance) nodeModalDistance.textContent = `📍 ${Math.round(dist)}m`;
 
+  const currentFort = fort || (poiManager ? poiManager.getFortification(poi.id) : {});
+  const currentName = currentUser?.username || localStorage.getItem(SAVED_GUEST_NAME_KEY) || 'TAGGER_01';
+  const isMine = currentFort.isOwned && (
+    (currentUser && currentFort.owner_id === currentUser.id) ||
+    (currentFort.owner && currentFort.owner.toLowerCase() === currentName.toLowerCase())
+  );
+  const isOwned = currentFort.isOwned && !isMine;
+
+  // Check physical presence or active tactical drone link
+  const isPresentInHex = (currentHexId === poi.hexId);
+  const hasActiveDrone = droneManager && droneManager.drones.some(d => d.targetHexId === poi.hexId);
+  const hasTacticalLink = isPresentInHex || hasActiveDrone;
+
   if (nodeOwnerText) {
     if (isMine) {
-      nodeOwnerText.textContent = '🏢 IN DEINEM BESITZ';
+      nodeOwnerText.textContent = hasActiveDrone ? '🛸 IN DEINEM BESITZ (DROHNE AKTIV)' : '🏢 IN DEINEM BESITZ';
       nodeOwnerText.style.color = '#39ff14';
     } else if (isOwned) {
       nodeOwnerText.textContent = `GEHÖRT: ${(currentFort.owner || 'TAGGER').toUpperCase()}`;
       nodeOwnerText.style.color = currentFort.color || '#ff0055';
+    } else if (!hasTacticalLink) {
+      nodeOwnerText.textContent = '⚠️ AUSSER REICHWEITE (DROHNE BENÖTIGT)';
+      nodeOwnerText.style.color = 'var(--accent-orange)';
     } else {
-      nodeOwnerText.textContent = 'FREIES GEBÄUDE';
-      nodeOwnerText.style.color = 'var(--text-dim)';
+      nodeOwnerText.textContent = 'FREIES GEBÄUDE (BEREIT ZUM KAUF)';
+      nodeOwnerText.style.color = '#00f0ff';
     }
   }
 
@@ -1166,18 +1178,27 @@ function openNodeControlModal(poi, fort) {
     dataBitsManager.spawnBuildingFountain(poi.lat, poi.lng, 16);
   }
 
-  // Show/Hide Buy Button vs Upgrade Options
+  // Show/Hide Buy Button vs Drone Deployment
   if (btnBuyBuilding) {
-    btnBuyBuilding.style.display = isMine ? 'none' : 'block';
-    btnBuyBuilding.textContent = isOwned ? '⚔️ GEBÄUDE ÜBERNEHMEN (100 💎 BITS)' : '🏢 DIESES GEBÄUDE KAUFEN (75 💎 BITS)';
+    if (isMine) {
+      btnBuyBuilding.style.display = 'none';
+    } else if (!hasTacticalLink) {
+      btnBuyBuilding.style.display = 'block';
+      btnBuyBuilding.textContent = '🛸 DROHNE HINSCHICKEN & WABE SICHERN (30 XP)';
+      btnBuyBuilding.style.background = 'linear-gradient(135deg, #00f0ff, #7900ff)';
+    } else {
+      btnBuyBuilding.style.display = 'block';
+      btnBuyBuilding.style.background = '';
+      btnBuyBuilding.textContent = isOwned ? '⚔️ GEBÄUDE ÜBERNEHMEN (100 💎 BITS)' : '🏢 DIESES GEBÄUDE KAUFEN (75 💎 BITS)';
+    }
   }
 
   if (btnNodeHackBits) {
-    btnNodeHackBits.style.display = poi.isDataDispenser ? 'block' : 'none';
+    btnNodeHackBits.style.display = (poi.isDataDispenser && hasTacticalLink) ? 'block' : 'none';
   }
 
   if (nodeUpgradesSection) {
-    nodeUpgradesSection.style.display = isMine ? 'flex' : 'none';
+    nodeUpgradesSection.style.display = (isMine && hasTacticalLink) ? 'flex' : 'none';
   }
 
   if (nodeModal) nodeModal.classList.add('active');
@@ -1216,6 +1237,25 @@ if (btnNodeHackBits) {
 if (btnBuyBuilding) {
   btnBuyBuilding.addEventListener('click', () => {
     if (!activeSelectedPoi || !dataBitsManager || !poiManager) return;
+
+    const isPresentInHex = (currentHexId === activeSelectedPoi.hexId);
+    const hasActiveDrone = droneManager && droneManager.drones.some(d => d.targetHexId === activeSelectedPoi.hexId);
+    const hasTacticalLink = isPresentInHex || hasActiveDrone;
+
+    // Remote building without drone: deploy drone first!
+    if (!hasTacticalLink) {
+      if (totalXp < DRONE_DEPLOY_COST_XP) {
+        showToast(`⚠️ Nicht genug XP für Drohne (${DRONE_DEPLOY_COST_XP} XP benötigt)!`);
+        return;
+      }
+      addXP(-DRONE_DEPLOY_COST_XP, '🛸 DROHNE ENTSANDT');
+      droneManager.deployDrone(activeSelectedPoi.hexId, userColor);
+      soundEngine.playUpgrade();
+      showToast(`🛸 Drohne ist im Anflug! Sichert ${activeSelectedPoi.name} für 90 Sekunden.`);
+      openNodeControlModal(activeSelectedPoi);
+      return;
+    }
+
     const currentFort = poiManager.getFortification(activeSelectedPoi.id);
     const cost = currentFort.isOwned ? 100 : 75;
 
