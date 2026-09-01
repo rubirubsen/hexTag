@@ -719,7 +719,7 @@ body.hud-hidden .hud-restore-floating-btn {
   background: rgba(4, 7, 13, 0.85);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  z-index: 100;
+  z-index: 500;
   display: none;
   align-items: center;
   justify-content: center;

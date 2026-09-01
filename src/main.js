@@ -1828,6 +1828,20 @@ function syncSoundUI() {
 }
 syncSoundUI();
 
+const menuDeviceIcon = document.getElementById('menuDeviceIcon');
+const menuDeviceBadge = document.getElementById('menuDeviceBadge');
+const isMobileDevice = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+
+if (menuDeviceBadge) {
+  menuDeviceBadge.textContent = isMobileDevice ? 'MOBILE GPS' : 'PC HQ';
+  menuDeviceBadge.style.background = isMobileDevice ? 'rgba(57, 255, 20, 0.2)' : 'rgba(0, 240, 255, 0.2)';
+  menuDeviceBadge.style.color = isMobileDevice ? '#39ff14' : '#00f0ff';
+  menuDeviceBadge.style.borderColor = isMobileDevice ? '#39ff14' : '#00f0ff';
+}
+if (menuDeviceIcon) {
+  menuDeviceIcon.textContent = isMobileDevice ? '📱' : '💻';
+}
+
 if (btnBurgerMenu) {
   btnBurgerMenu.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -1843,7 +1857,8 @@ document.addEventListener('click', (e) => {
 });
 
 if (btnMenuSoundToggle) {
-  btnMenuSoundToggle.addEventListener('click', () => {
+  btnMenuSoundToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
     const isMuted = soundEngine.toggleMute();
     syncSoundUI();
     if (!isMuted) soundEngine.playClick();
@@ -1852,25 +1867,37 @@ if (btnMenuSoundToggle) {
 }
 
 if (btnMenuOpenGuide) {
-  btnMenuOpenGuide.addEventListener('click', () => {
+  const openGuideAction = (e) => {
+    e?.stopPropagation();
     soundEngine.playClick();
     if (hudDropdownMenu) hudDropdownMenu.classList.remove('active');
-    if (guideModal) guideModal.classList.add('active');
-  });
+    if (guideModal) {
+      guideModal.classList.add('active');
+      const panel = guideModal.querySelector('.spray-panel');
+      if (panel) panel.scrollTop = 0;
+    }
+  };
+  btnMenuOpenGuide.addEventListener('click', openGuideAction);
 }
 
 if (btnCloseGuideModal) {
-  btnCloseGuideModal.addEventListener('click', () => {
+  btnCloseGuideModal.addEventListener('click', (e) => {
+    e.stopPropagation();
     soundEngine.playClick();
     if (guideModal) guideModal.classList.remove('active');
   });
 }
 
 if (btnMenuOpenFaq) {
-  btnMenuOpenFaq.addEventListener('click', () => {
+  btnMenuOpenFaq.addEventListener('click', (e) => {
+    e.stopPropagation();
     soundEngine.playClick();
     if (hudDropdownMenu) hudDropdownMenu.classList.remove('active');
-    if (guideModal) guideModal.classList.add('active');
+    if (guideModal) {
+      guideModal.classList.add('active');
+      const panel = guideModal.querySelector('.spray-panel');
+      if (panel) panel.scrollTop = 0;
+    }
     showToast('📖 Siehe Anleitung für Spielmechaniken (FAQ in Kürze)');
   });
 }

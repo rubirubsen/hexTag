@@ -64,7 +64,16 @@
           <span class="dropdown-arrow">❯</span>
         </div>
 
-        <!-- 3. FAQ (VORBEREITET) -->
+        <!-- 3. GERÄTE-MODUS INFO -->
+        <div class="dropdown-item" id="btnMenuDeviceMode" style="cursor: default;">
+          <div class="dropdown-item-left">
+            <span id="menuDeviceIcon">💻</span>
+            <span>Modus</span>
+          </div>
+          <span class="dropdown-switch-badge" id="menuDeviceBadge" style="background: rgba(0, 240, 255, 0.2); color: #00f0ff; border: 1px solid #00f0ff;">PC HQ</span>
+        </div>
+
+        <!-- 4. FAQ (VORBEREITET) -->
         <div class="dropdown-item" id="btnMenuOpenFaq">
           <div class="dropdown-item-left">
             <span>❓</span>
@@ -504,6 +513,8 @@
           <span>WABEN-TAGS & GRAFFITIS</span>
           <small id="galleryHexLabel">HEX: ...</small>
         </div>
+        <button class="close-modal-btn" id="btnCloseGalleryModal">✕</button>
+      </div>
       <div class="gallery-grid" id="galleryGrid"></div>
     </div>
   </div>
@@ -520,6 +531,19 @@
       </div>
 
       <div class="guide-content" style="padding: 16px; display: flex; flex-direction: column; gap: 14px;">
+        <!-- 0. PC VS MOBILE MODUS -->
+        <div class="guide-card" style="border: 1.5px solid rgba(0, 240, 255, 0.4); background: linear-gradient(135deg, rgba(0, 240, 255, 0.08), rgba(255, 128, 0, 0.08));">
+          <div class="guide-card-header" style="color: #ffe600;">
+            <span class="guide-icon">🎮</span>
+            <strong>💻 PC-Kommando vs. 📱 Smartphone-AR</strong>
+          </div>
+          <p>hexTag bietet zwei vollwertige Spielweisen:</p>
+          <ul>
+            <li><strong>💻 PC / Desktop (Taktische HQ-Zentrale):</strong> Du steuerst deine Stadt remote vom Schreibtisch aus. Baue dein <strong>HQ (Data-Silos, Hangar, Relais)</strong> aus, schicke <strong>Drohnen (🛸)</strong> los, um entfernte Waben & Gebäude zu erobern, und vernetze Reviere mit <strong>Laser-Linien</strong>!</li>
+            <li><strong>📱 Smartphone (Echtzeit GPS & Street-AR):</strong> Du bist draußen im Viertel unterwegs. Nimm Waben durch <strong>echtes Laufen</strong> ein, sammle <strong>1-Bit-Kristalle</strong> auf den Straßen und spraye/betrachte Graffitis mit der <strong>360° AR-Kamera</strong> live an realen Hauswänden!</li>
+          </ul>
+        </div>
+
         <!-- 1. WABEN -->
         <div class="guide-card">
           <div class="guide-card-header">
