@@ -9,6 +9,9 @@ import {
   generateToken,
   verifyToken,
   findOrCreateUser,
+  getUserById,
+  updateUserProfile,
+  loginOrRegisterGuestUser,
   getGoogleAuthURL,
   getTwitchAuthURL,
   getDiscordAuthURL
@@ -42,28 +45,57 @@ app.use(authMiddleware);
 
 // --- 1. AUTH & SSO ENDPOINTS ---
 
-// Get current user profile
-app.get('/api/auth/me', (req, res) => {
+// Get current user profile (with live DB sync)
+app.get('/api/auth/me', async (req, res) => {
   if (!req.user) {
     return res.json({ authenticated: false, user: null });
   }
-  res.json({ authenticated: true, user: req.user });
+  try {
+    const liveUser = await getUserById(req.user.id);
+    const user = liveUser || req.user;
+    res.json({ authenticated: true, user });
+  } catch (err) {
+    console.error('[Auth] Error fetching live user:', err);
+    res.json({ authenticated: true, user: req.user });
+  }
 });
 
-// Guest Login (Sofort startklar)
-app.post('/api/auth/guest', async (req, res) => {
-  const guestName = req.body.username || `Tagger_${Math.floor(1000 + Math.random() * 9000)}`;
-  const guestColor = req.body.color || '#ff8000';
-  const guestId = `guest_${Date.now()}`;
+// Update Profile & XP
+app.post('/api/auth/profile', async (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Nicht angemeldet' });
+  }
+  try {
+    const { username, color, xp, level, avatar_url } = req.body;
+    const updated = await updateUserProfile(req.user.id, { username, color, xp, level, avatar_url });
+    const token = generateToken(updated);
+    res.cookie('token', token, { httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
+    res.json({ success: true, user: updated, token });
+  } catch (err) {
+    console.error('[Auth] Error updating profile:', err);
+    res.status(500).json({ error: 'Fehler beim Speichern des Profils' });
+  }
+});
 
-  const user = await findOrCreateUser({
-    ssoProvider: 'guest',
-    ssoId: guestId,
-    username: guestName,
-    color: guestColor,
-    avatarUrl: ''
+// Guest Login & Registration with Password Protection
+app.post('/api/auth/guest', async (req, res) => {
+  const { username, password, color } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({ success: false, error: 'Bitte gib einen Spielernamen und ein Passwort ein.' });
+  }
+
+  const result = await loginOrRegisterGuestUser({
+    username,
+    password,
+    color: color || '#ff8000'
   });
 
+  if (!result.success) {
+    return res.status(400).json({ success: false, error: result.error });
+  }
+
+  const user = result.user;
   const token = generateToken(user);
   res.cookie('token', token, { httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
   res.json({ success: true, token, user });
@@ -74,7 +106,7 @@ app.get('/api/auth/google', (req, res) => res.redirect(getGoogleAuthURL(req)));
 app.get('/api/auth/twitch', (req, res) => res.redirect(getTwitchAuthURL(req)));
 app.get('/api/auth/discord', (req, res) => res.redirect(getDiscordAuthURL(req)));
 
-// SSO Callback Handlers
+// SSO Callback Handlers (supports account linking if already logged in)
 app.get('/api/auth/google/callback', async (req, res) => {
   const { code } = req.query;
   if (!code) return res.redirect('/?error=no_code');
@@ -101,9 +133,10 @@ app.get('/api/auth/google/callback', async (req, res) => {
     const user = await findOrCreateUser({
       ssoProvider: 'google',
       ssoId: googleUser.id,
-      username: googleUser.name || googleUser.email.split('@')[0],
+      username: googleUser.name || googleUser.email?.split('@')[0] || 'GoogleTagger',
       email: googleUser.email,
-      avatarUrl: googleUser.picture
+      avatarUrl: googleUser.picture,
+      existingUserId: req.user?.id || null
     });
 
     const token = generateToken(user);
@@ -140,14 +173,15 @@ app.get('/api/auth/twitch/callback', async (req, res) => {
       }
     });
     const twitchData = await userRes.json();
-    const twitchUser = twitchData.data[0];
+    const twitchUser = twitchData?.data?.[0] || {};
 
     const user = await findOrCreateUser({
       ssoProvider: 'twitch',
-      ssoId: twitchUser.id,
-      username: twitchUser.display_name,
+      ssoId: twitchUser.id || 'twitch_user',
+      username: twitchUser.display_name || twitchUser.login || 'TwitchTagger',
       email: twitchUser.email,
-      avatarUrl: twitchUser.profile_image_url
+      avatarUrl: twitchUser.profile_image_url,
+      existingUserId: req.user?.id || null
     });
 
     const token = generateToken(user);
@@ -156,6 +190,50 @@ app.get('/api/auth/twitch/callback', async (req, res) => {
   } catch (err) {
     console.error('[SSO] Twitch Callback Error:', err);
     res.redirect('/?error=twitch_failed');
+  }
+});
+
+app.get('/api/auth/discord/callback', async (req, res) => {
+  const { code } = req.query;
+  if (!code) return res.redirect('/?error=no_code');
+
+  try {
+    const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: process.env.DISCORD_CLIENT_ID,
+        client_secret: process.env.DISCORD_CLIENT_SECRET,
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: process.env.DISCORD_CALLBACK_URL || `${req.protocol}://${req.get('host')}/api/auth/discord/callback`
+      })
+    });
+    const tokens = await tokenRes.json();
+
+    const userRes = await fetch('https://discord.com/api/users/@me', {
+      headers: { Authorization: `Bearer ${tokens.access_token}` }
+    });
+    const discordUser = await userRes.json();
+    const avatarUrl = discordUser.avatar
+      ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`
+      : '';
+
+    const user = await findOrCreateUser({
+      ssoProvider: 'discord',
+      ssoId: discordUser.id,
+      username: discordUser.global_name || discordUser.username || 'DiscordTagger',
+      email: discordUser.email,
+      avatarUrl,
+      existingUserId: req.user?.id || null
+    });
+
+    const token = generateToken(user);
+    res.cookie('token', token, { httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
+    res.redirect('/?login=success');
+  } catch (err) {
+    console.error('[SSO] Discord Callback Error:', err);
+    res.redirect('/?error=discord_failed');
   }
 });
 
@@ -211,9 +289,22 @@ app.post('/api/zones/capture', async (req, res) => {
     }
   }
 
+  // Update User XP on Server if authenticated
+  let updatedUser = null;
+  if (req.user?.id) {
+    try {
+      const u = await getUserById(req.user.id);
+      const newXp = (u?.xp || 0) + 50;
+      const newLvl = Math.floor(newXp / 100) + 1;
+      updatedUser = await updateUserProfile(req.user.id, { xp: newXp, level: newLvl });
+    } catch (e) {
+      console.error('[Capture] Error awarding XP:', e);
+    }
+  }
+
   const zone = { hex_id: hexId, owner_id: ownerId, owner_name: name, color, captured_at: now };
   memoryZones.set(hexId, zone);
-  res.json({ success: true, zone });
+  res.json({ success: true, zone, user: updatedUser });
 });
 
 app.get('/api/tags', async (req, res) => {
@@ -258,9 +349,22 @@ app.post('/api/tags', async (req, res) => {
     }
   }
 
+  // Update User XP on Server if authenticated
+  let updatedUser = null;
+  if (req.user?.id) {
+    try {
+      const u = await getUserById(req.user.id);
+      const newXp = (u?.xp || 0) + 20;
+      const newLvl = Math.floor(newXp / 100) + 1;
+      updatedUser = await updateUserProfile(req.user.id, { xp: newXp, level: newLvl });
+    } catch (e) {
+      console.error('[Tags] Error awarding XP:', e);
+    }
+  }
+
   const newTag = { id: tagId, hex_id: hexId, user_id: userId, author: authorName, color, lat, lng, image_data: imageBase64, created_at: now };
   memoryTags.unshift(newTag);
-  res.json({ success: true, tag: newTag });
+  res.json({ success: true, tag: newTag, user: updatedUser });
 });
 
 // --- 3. STATIC FRONTEND SERVING (SPA) ---

@@ -616,6 +616,25 @@ body, html {
   border-color: var(--accent-orange);
 }
 
+.guest-hint {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-align: center;
+  margin-top: 2px;
+}
+
+.auth-error-box {
+  background: rgba(255, 0, 85, 0.15);
+  border: 1px solid #ff0055;
+  color: #ff5588;
+  font-size: 11px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: 600;
+  animation: pulse-glow 1s ease-in-out;
+}
+
 .profile-card {
   display: flex;
   align-items: center;

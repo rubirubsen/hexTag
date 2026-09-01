@@ -10,6 +10,7 @@ BEGIN
         username NVARCHAR(64) NOT NULL,
         email NVARCHAR(128) NULL,
         avatar_url NVARCHAR(512) NULL,
+        password_hash NVARCHAR(256) NULL,
         sso_provider NVARCHAR(32) NOT NULL DEFAULT 'guest',
         sso_id NVARCHAR(128) NOT NULL,
         color NVARCHAR(16) NOT NULL DEFAULT '#ff8000',
@@ -20,6 +21,14 @@ BEGIN
     );
     CREATE NONCLUSTERED INDEX IX_Users_SSO ON Users(sso_provider, sso_id);
     PRINT 'Tabelle [Users] erfolgreich erstellt.';
+END
+ELSE
+BEGIN
+    IF NOT EXISTS (SELECT * FROM syscolumns WHERE id=OBJECT_ID('Users') AND name='password_hash')
+    BEGIN
+        ALTER TABLE Users ADD password_hash NVARCHAR(256) NULL;
+        PRINT 'Spalte [password_hash] zu Users hinzugefügt.';
+    END
 END
 GO
 

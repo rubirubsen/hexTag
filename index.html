@@ -183,8 +183,11 @@
           <div class="auth-divider"><span>ODER</span></div>
 
           <div class="guest-login-box">
-            <input type="text" id="guestUsernameInput" placeholder="Dein Tagger-Name (z.B. CyberGhost)" maxlength="20" />
-            <button class="action-btn primary-spray-btn" id="btnGuestLogin">ALS GAST STARTEN</button>
+            <input type="text" id="guestUsernameInput" placeholder="Dein Tagger-Name (z.B. CyberGhost)" maxlength="20" autocomplete="username" />
+            <input type="password" id="guestPasswordInput" placeholder="Passwort / PIN (Name reservieren)" maxlength="32" autocomplete="current-password" />
+            <div id="guestLoginError" class="auth-error-box" style="display: none;"></div>
+            <button class="action-btn primary-spray-btn" id="btnGuestLogin">ANMELDEN / REGISTRIEREN</button>
+            <small class="guest-hint">🔒 Mit dem Passwort bleibt dein Spielername dauerhaft für dich reserviert.</small>
           </div>
         </div>
 
@@ -197,6 +200,16 @@
               <span id="profileXp" class="profile-xp">0 XP</span>
             </div>
           </div>
+
+          <div id="ssoLinkSection" style="margin-top: 16px; display: none;">
+            <p class="auth-desc" style="margin-bottom: 8px; font-size: 11px;">🛡️ Gast-Konto mit SSO verknüpfen (behält XP & Waben):</p>
+            <div class="sso-buttons">
+              <a href="/api/auth/google" class="sso-btn sso-google"><span>🌐 Google verknüpfen</span></a>
+              <a href="/api/auth/twitch" class="sso-btn sso-twitch"><span>🟣 Twitch verknüpfen</span></a>
+              <a href="/api/auth/discord" class="sso-btn sso-discord"><span>💬 Discord verknüpfen</span></a>
+            </div>
+          </div>
+
           <button class="action-btn" id="btnLogout" style="margin-top: 14px; width: 100%; border-color: #ff0055; color: #ff0055;">ABMELDEN</button>
         </div>
       </div>

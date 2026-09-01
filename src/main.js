@@ -12,8 +12,11 @@ const PASSIVE_XP_PER_MINUTE = 10;
 const SPRAY_XP_REWARD = 20;
 const DRONE_DEPLOY_COST_XP = 30;
 
-// Persistent Player Color
+// Persistent Player State Keys
 const SAVED_COLOR_KEY = 'hextag_user_color';
+const SAVED_XP_KEY = 'hextag_user_xp';
+const SAVED_GUEST_NAME_KEY = 'hextag_guest_name';
+
 let userColor = localStorage.getItem(SAVED_COLOR_KEY) || '#ff8000';
 document.documentElement.style.setProperty('--user-color', userColor);
 
@@ -24,7 +27,9 @@ let currentUser = null;
 let userLocation = { lat: 52.520008, lng: 13.404954 };
 let currentHexId = null;
 let captureSeconds = 0;
-let totalXp = 50;
+let totalXp = parseInt(localStorage.getItem(SAVED_XP_KEY), 10);
+if (isNaN(totalXp)) totalXp = 50;
+
 let isSimulating = false;
 let isFollowingUser = true;
 let watchId = null;
@@ -75,6 +80,9 @@ const profileProvider = document.getElementById('profileProvider');
 const profileXp = document.getElementById('profileXp');
 const btnGuestLogin = document.getElementById('btnGuestLogin');
 const guestUsernameInput = document.getElementById('guestUsernameInput');
+const guestPasswordInput = document.getElementById('guestPasswordInput');
+const guestLoginError = document.getElementById('guestLoginError');
+const ssoLinkSection = document.getElementById('ssoLinkSection');
 const btnLogout = document.getElementById('btnLogout');
 
 totalXpDisplay.textContent = totalXp;
@@ -82,7 +90,54 @@ userColorDot.style.background = userColor;
 userColorDot.style.boxShadow = `0 0 12px ${userColor}`;
 
 // --- 1. AUTH & SSO PROFILE SYSTEM ---
+export function addXP(amount, reason = '') {
+  totalXp = Math.max(0, totalXp + amount);
+  totalXpDisplay.textContent = totalXp;
+  localStorage.setItem(SAVED_XP_KEY, totalXp);
+
+  const calculatedLevel = Math.floor(totalXp / 100) + 1;
+  if (currentUser) {
+    currentUser.xp = totalXp;
+    currentUser.level = calculatedLevel;
+    profileXp.textContent = `${totalXp} XP • LEVEL ${calculatedLevel}`;
+    syncProfileToServer({ xp: totalXp, level: calculatedLevel });
+  }
+
+  if (amount > 0 && reason) {
+    showToast(`${reason} (+${amount} XP)`);
+  } else if (amount < 0 && reason) {
+    showToast(`${reason} (${amount} XP)`);
+  }
+}
+
+async function syncProfileToServer(updates = {}) {
+  try {
+    const res = await fetch('/api/auth/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.user) {
+        currentUser = data.user;
+      }
+    }
+  } catch (e) {
+    console.log('[Auth] Profile-Sync offline/gepuffert:', e);
+  }
+}
+
 async function checkAuthStatus() {
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.has('login')) {
+    showToast('🎉 Erfolgreich angemeldet & Konto verknüpft!');
+    window.history.replaceState({}, document.title, window.location.pathname);
+  } else if (urlParams.has('error')) {
+    showToast('⚠️ SSO-Anmeldung fehlgeschlagen.');
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+
   try {
     const res = await fetch('/api/auth/me');
     const data = await res.json();
@@ -101,7 +156,10 @@ function setLoggedInUser(user) {
   currentUser = user;
   playerName.textContent = user.username.toUpperCase();
   userColor = user.color || userColor;
-  totalXp = user.xp || totalXp;
+  localStorage.setItem(SAVED_COLOR_KEY, userColor);
+
+  totalXp = user.xp !== undefined ? user.xp : totalXp;
+  localStorage.setItem(SAVED_XP_KEY, totalXp);
   totalXpDisplay.textContent = totalXp;
 
   loggedOutView.style.display = 'none';
@@ -110,19 +168,32 @@ function setLoggedInUser(user) {
   profileUsername.textContent = user.username;
   profileAvatar.src = user.avatar_url || 'https://api.dicebear.com/7.x/bottts/svg?seed=' + user.username;
   profileProvider.textContent = (user.sso_provider || 'SSO').toUpperCase();
-  profileXp.textContent = `${totalXp} XP • LEVEL ${user.level || 1}`;
+  profileXp.textContent = `${totalXp} XP • LEVEL ${user.level || Math.floor(totalXp / 100) + 1}`;
 
-  showToast(`Willkommen zurück, ${user.username}!`);
+  // SSO Verknuepfung anzeigen, wenn noch Gast
+  if (ssoLinkSection) {
+    ssoLinkSection.style.display = user.sso_provider === 'guest' ? 'block' : 'none';
+  }
+
+  document.documentElement.style.setProperty('--user-color', userColor);
+  userColorDot.style.background = userColor;
+  userColorDot.style.boxShadow = `0 0 12px ${userColor}`;
+  syncColorButtons();
+
+  showToast(`Willkommen, ${user.username}!`);
 }
 
 function setLoggedOut() {
   currentUser = null;
-  playerName.textContent = 'LOGIN ❯';
+  const savedGuest = localStorage.getItem(SAVED_GUEST_NAME_KEY);
+  playerName.textContent = savedGuest ? savedGuest.toUpperCase() : 'LOGIN ❯';
   loggedOutView.style.display = 'block';
   loggedInView.style.display = 'none';
+  if (ssoLinkSection) ssoLinkSection.style.display = 'none';
 }
 
 btnOpenAuthModal.addEventListener('click', () => {
+  if (guestLoginError) guestLoginError.style.display = 'none';
   authModal.classList.add('active');
 });
 
@@ -132,24 +203,64 @@ btnCloseAuthModal.addEventListener('click', () => {
 
 btnGuestLogin.addEventListener('click', async () => {
   const customName = guestUsernameInput.value.trim();
+  const password = guestPasswordInput ? guestPasswordInput.value.trim() : '';
+
+  if (!customName || customName.length < 2) {
+    if (guestLoginError) {
+      guestLoginError.textContent = '⚠️ Bitte gib einen Spielernamen ein (mind. 2 Zeichen).';
+      guestLoginError.style.display = 'block';
+    }
+    return;
+  }
+
+  if (!password || password.length < 3) {
+    if (guestLoginError) {
+      guestLoginError.textContent = '⚠️ Bitte gib ein Passwort/PIN ein (mind. 3 Zeichen) zum Reservieren deines Namens.';
+      guestLoginError.style.display = 'block';
+    }
+    return;
+  }
+
+  if (guestLoginError) guestLoginError.style.display = 'none';
+  localStorage.setItem(SAVED_GUEST_NAME_KEY, customName);
+
   try {
     const res = await fetch('/api/auth/guest', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: customName, color: userColor })
+      body: JSON.stringify({ username: customName, password, color: userColor })
     });
     const data = await res.json();
-    if (data.success && data.user) {
+    if (res.ok && data.success && data.user) {
       setLoggedInUser(data.user);
+      if (guestPasswordInput) guestPasswordInput.value = '';
       authModal.classList.remove('active');
+    } else {
+      if (guestLoginError) {
+        guestLoginError.textContent = `⚠️ ${data.error || 'Fehler beim Anmelden'}`;
+        guestLoginError.style.display = 'block';
+      }
     }
   } catch (err) {
     console.error(err);
+    // Offline Fallback
+    setLoggedInUser({
+      id: `local_${customName.toLowerCase()}`,
+      username: customName,
+      color: userColor,
+      xp: totalXp,
+      level: Math.floor(totalXp / 100) + 1,
+      sso_provider: 'guest (offline)'
+    });
+    if (guestPasswordInput) guestPasswordInput.value = '';
+    authModal.classList.remove('active');
   }
 });
 
 btnLogout.addEventListener('click', async () => {
-  await fetch('/api/auth/logout');
+  try {
+    await fetch('/api/auth/logout');
+  } catch (e) {}
   setLoggedOut();
   authModal.classList.remove('active');
   showToast('Erfolgreich abgemeldet.');
@@ -244,6 +355,23 @@ map.on('load', () => {
   updateHexGrid(userLocation.lat, userLocation.lng);
   startGeolocation();
   syncColorButtons();
+
+  // Handle responsive resizing (e.g. Chrome DevTools Device Mode toggle)
+  window.addEventListener('resize', () => {
+    if (map) map.resize();
+  });
+  const mapEl = document.getElementById('map');
+  if (window.ResizeObserver && mapEl) {
+    new ResizeObserver(() => {
+      if (map) map.resize();
+    }).observe(mapEl);
+  }
+
+  // Refresh grid when user moves the map
+  map.on('moveend', () => {
+    const center = map.getCenter();
+    updateHexGrid(center.lat, center.lng);
+  });
 });
 
 // Sync Zones with Backend
@@ -270,7 +398,7 @@ async function fetchServerZones() {
 function updateHexGrid(lat, lng) {
   try {
     const centerHex = h3.latLngToCell(lat, lng, H3_RESOLUTION);
-    const nearbyHexes = h3.gridDisk(centerHex, 3);
+    const nearbyHexes = h3.gridDisk(centerHex, 5); // 5 rings = 91 hexes (~700m radius)
 
     const features = nearbyHexes.map(hex => {
       const boundary = h3.cellToBoundary(hex).map(([bLat, bLng]) => [bLng, bLat]);
@@ -281,16 +409,16 @@ function updateHexGrid(lat, lng) {
       const tagCount = tagStore.getTagCountForHex(hex);
       const hasDrone = droneManager && droneManager.drones.some(d => d.targetHexId === hex);
 
-      let fillColor = '#000000';
-      let fillOpacity = 0.05;
-      let strokeColor = 'rgba(255, 128, 0, 0.25)';
-      let strokeWidth = 1.5;
+      let fillColor = '#ff8000';
+      let fillOpacity = 0.04;
+      let strokeColor = 'rgba(255, 128, 0, 0.45)';
+      let strokeWidth = 2.0;
 
       if (captured) {
         fillColor = captured.color;
         fillOpacity = 0.45;
         strokeColor = captured.color;
-        strokeWidth = 2.5;
+        strokeWidth = 2.8;
       }
 
       if (hasDrone) {
@@ -302,16 +430,17 @@ function updateHexGrid(lat, lng) {
 
       if (tagCount > 0) {
         strokeColor = '#ffe600';
+        strokeWidth = 2.5;
       }
 
       if (isCurrent) {
         const progress = Math.min(captureSeconds / CAPTURE_TIME_SECONDS, 1.0);
         strokeColor = userColor;
-        strokeWidth = 3.5;
+        strokeWidth = 3.8;
 
         if (!captured) {
           fillColor = userColor;
-          fillOpacity = 0.15 + progress * 0.45;
+          fillOpacity = 0.20 + progress * 0.45;
         }
       }
 
@@ -437,9 +566,7 @@ setInterval(() => {
 
     captureSeconds++;
     if (captureSeconds % 60 === 0) {
-      totalXp += PASSIVE_XP_PER_MINUTE;
-      totalXpDisplay.textContent = totalXp;
-      showToast(`+${PASSIVE_XP_PER_MINUTE} XP ERHALTEN!`);
+      addXP(PASSIVE_XP_PER_MINUTE, '⏱️ WABE GEHALTEN');
     }
   } else {
     captureSeconds++;
@@ -472,19 +599,22 @@ async function completeCapture(hexId) {
 
   // Server-Sync
   try {
-    await fetch('/api/zones/capture', {
+    const res = await fetch('/api/zones/capture', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ hexId, color: userColor, ownerName })
     });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.user) {
+        currentUser = data.user;
+      }
+    }
   } catch (e) {
     console.log('[hexTag] Offline Capture Sync:', e);
   }
 
-  totalXp += 50;
-  totalXpDisplay.textContent = totalXp;
-
-  showToast(`🎉 WABE EROBERT! (+50 XP)`);
+  addXP(50, '🎉 WABE EROBERT!');
   updateHexGrid(userLocation.lat, userLocation.lng);
 }
 
@@ -558,8 +688,7 @@ map.on('click', (e) => {
     btnArmDrone.style.background = '';
     btnArmDrone.style.color = '#fff';
 
-    totalXp -= DRONE_DEPLOY_COST_XP;
-    totalXpDisplay.textContent = totalXp;
+    addXP(-DRONE_DEPLOY_COST_XP, '🛸 DROHNE ENTSANDT');
 
     droneManager.deployDrone({
       targetHexId: clickedHex,
@@ -642,7 +771,7 @@ btnSubmitSpray.addEventListener('click', async () => {
 
   // Server Tag Sync
   try {
-    await fetch('/api/tags', {
+    const res = await fetch('/api/tags', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -654,14 +783,17 @@ btnSubmitSpray.addEventListener('click', async () => {
         author: authorName
       })
     });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.user) {
+        currentUser = data.user;
+      }
+    }
   } catch (e) {
     console.log('[hexTag] Offline Tag Sync:', e);
   }
 
-  totalXp += SPRAY_XP_REWARD;
-  totalXpDisplay.textContent = totalXp;
-
-  showToast(`🎨 TAG GESPRÜHT! (+${SPRAY_XP_REWARD} XP)`);
+  addXP(SPRAY_XP_REWARD, '🎨 TAG GESPRÜHT!');
   sprayModal.classList.remove('active');
   updateHudTagCount(currentHexId);
   updateHexGrid(userLocation.lat, userLocation.lng);
@@ -731,6 +863,11 @@ document.querySelectorAll('.color-btn').forEach(btn => {
     userColorDot.style.boxShadow = `0 0 12px ${userColor}`;
 
     syncColorButtons();
+
+    if (currentUser) {
+      currentUser.color = userColor;
+      syncProfileToServer({ color: userColor });
+    }
 
     if (graffitiCanvas) graffitiCanvas.setBrushColor(userColor);
     updateHexGrid(userLocation.lat, userLocation.lng);

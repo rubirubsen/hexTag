@@ -18,6 +18,9 @@ const config = {
 
 import { runMigration } from './migrate.js';
 
+let pool = null;
+let isConnected = false;
+
 export async function initDatabase() {
   if (!process.env.DB_PASSWORD && !process.env.DB_SERVER) {
     console.log('[Database] Keine MSSQL-Zugangsdaten in .env hinterlegt. Nutze In-Memory Fallback.');
@@ -52,12 +55,14 @@ async function createTables() {
       username NVARCHAR(64) NOT NULL,
       email NVARCHAR(128),
       avatar_url NVARCHAR(256),
+      password_hash NVARCHAR(256),
       sso_provider NVARCHAR(32),
       sso_id NVARCHAR(128),
       color NVARCHAR(16) DEFAULT '#ff8000',
       xp INT DEFAULT 0,
       level INT DEFAULT 1,
-      created_at BIGINT
+      created_at BIGINT,
+      last_login BIGINT
     );
 
     -- Captured Hex Zones Table
