@@ -120,27 +120,17 @@
       </div>
     </div>
 
-    <!-- Persistent Player Color Picker -->
+    <!-- Persistent Free Choice Color Picker (Desktop) -->
     <div class="cmd-section">
-      <div class="section-title">SPIELERFARBE & NEON-PALETTE</div>
-      <div class="color-picker-group">
-        <button class="color-btn active" style="--c: #ff8000;" data-color="#ff8000" title="Cyber Orange"></button>
-        <button class="color-btn" style="--c: #00f0ff;" data-color="#00f0ff" title="Electric Cyan"></button>
-        <button class="color-btn" style="--c: #39ff14;" data-color="#39ff14" title="Toxic Lime"></button>
-        <button class="color-btn" style="--c: #ff0055;" data-color="#ff0055" title="Neon Magenta"></button>
-        <button class="color-btn" style="--c: #b026ff;" data-color="#b026ff" title="Deep Violet"></button>
-        <button class="color-btn" style="--c: #ffe600;" data-color="#ffe600" title="Cyber Gold"></button>
-        <button class="color-btn" style="--c: #ff007f;" data-color="#ff007f" title="Hot Pink"></button>
-        <button class="color-btn" style="--c: #00ffa3;" data-color="#00ffa3" title="Neon Turquoise"></button>
-        <button class="color-btn" style="--c: #d4ff00;" data-color="#d4ff00" title="Acid Yellow"></button>
-        <button class="color-btn" style="--c: #ff1a1a;" data-color="#ff1a1a" title="Crimson Red"></button>
-        <button class="color-btn" style="--c: #0077ff;" data-color="#0077ff" title="Ultra Blue"></button>
-        <button class="color-btn" style="--c: #ffffff;" data-color="#ffffff" title="Holo White"></button>
-        <label class="custom-color-picker-btn" title="Eigene Wunschfarbe wählen">
-          <input type="color" class="custom-color-input" value="#ff8000" />
-          <span>🎨</span>
-        </label>
-      </div>
+      <div class="section-title">SPIELERFARBE (FREIE WAHL)</div>
+      <label class="free-color-card" title="Klicke hier, um deine Wunschfarbe frei zu wählen">
+        <div class="free-color-preview" id="desktopColorPreview"></div>
+        <div class="free-color-info">
+          <strong id="desktopColorHex">#FF8000</strong>
+          <small>Farbwähler öffnen ❯</small>
+        </div>
+        <input type="color" id="desktopColorInput" class="custom-color-input" value="#ff8000" />
+      </label>
     </div>
   </aside>
 
@@ -150,7 +140,7 @@
     <span class="spray-text">TAG SPRAYEN</span>
   </button>
 
-  <!-- Bottom Floating Action Bar -->
+  <!-- Bottom Floating Action Bar (Mobile Dock) -->
   <nav class="hud-bottom-bar">
     <button class="hud-btn" id="btnCenterMap" title="Zentrieren auf GPS">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>
@@ -162,24 +152,12 @@
       <span>AR</span>
     </button>
 
-    <div class="color-picker-group mobile-only-colors">
-      <button class="color-btn active" style="--c: #ff8000;" data-color="#ff8000" title="Cyber Orange"></button>
-      <button class="color-btn" style="--c: #00f0ff;" data-color="#00f0ff" title="Electric Cyan"></button>
-      <button class="color-btn" style="--c: #39ff14;" data-color="#39ff14" title="Toxic Lime"></button>
-      <button class="color-btn" style="--c: #ff0055;" data-color="#ff0055" title="Neon Magenta"></button>
-      <button class="color-btn" style="--c: #b026ff;" data-color="#b026ff" title="Deep Violet"></button>
-      <button class="color-btn" style="--c: #ffe600;" data-color="#ffe600" title="Cyber Gold"></button>
-      <button class="color-btn" style="--c: #ff007f;" data-color="#ff007f" title="Hot Pink"></button>
-      <button class="color-btn" style="--c: #00ffa3;" data-color="#00ffa3" title="Neon Turquoise"></button>
-      <button class="color-btn" style="--c: #d4ff00;" data-color="#d4ff00" title="Acid Yellow"></button>
-      <button class="color-btn" style="--c: #ff1a1a;" data-color="#ff1a1a" title="Crimson Red"></button>
-      <button class="color-btn" style="--c: #0077ff;" data-color="#0077ff" title="Ultra Blue"></button>
-      <button class="color-btn" style="--c: #ffffff;" data-color="#ffffff" title="Holo White"></button>
-      <label class="custom-color-picker-btn" title="Eigene Wunschfarbe wählen">
-        <input type="color" class="custom-color-input" value="#ff8000" />
-        <span>🎨</span>
-      </label>
-    </div>
+    <!-- Free Choice Color Orb (Mobile) -->
+    <label class="hud-btn hud-color-orb-btn" title="Spielerfarbe frei wählen">
+      <div class="hud-color-orb" id="mobileColorOrb"></div>
+      <span>FARBE</span>
+      <input type="color" id="mobileColorInput" class="custom-color-input" value="#ff8000" />
+    </label>
 
     <button class="hud-btn test-btn" id="btnSimulateMove" title="Dev Move" style="display: none;">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>

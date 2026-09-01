@@ -322,68 +322,84 @@ body, html {
   border-color: rgba(255, 230, 0, 0.3);
 }
 
-.color-picker-group {
-  display: flex;
-  gap: 6px;
-  background: rgba(0, 0, 0, 0.45);
-  padding: 6px 8px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  max-width: 100%;
-}
-
-.color-picker-group::-webkit-scrollbar {
-  display: none;
-}
-
-.color-btn {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--c);
-  border: 2px solid transparent;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.color-btn.active {
-  transform: scale(1.25);
-  border-color: #ffffff;
-  box-shadow: 0 0 14px var(--c);
-}
-
-.custom-color-picker-btn {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #ff0055, #00f0ff, #ffe600);
-  border: 1.5px solid rgba(255, 255, 255, 0.4);
-  cursor: pointer;
+/* Free Choice Color Picker (Desktop & Mobile) */
+.free-color-card {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 11px;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 10px 14px;
+  cursor: pointer;
   position: relative;
   overflow: hidden;
-  flex-shrink: 0;
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: all 0.2s ease;
 }
 
-.custom-color-picker-btn:hover, .custom-color-picker-btn:active {
+.free-color-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--user-color);
+}
+
+.free-color-preview {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  background: var(--user-color);
+  box-shadow: 0 0 16px var(--user-color);
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.free-color-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.free-color-info strong {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--user-color);
+  letter-spacing: 1px;
+}
+
+.free-color-info small {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.hud-color-orb-btn {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.hud-color-orb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  background: var(--user-color);
+  box-shadow: 0 0 14px var(--user-color);
+  transition: all 0.2s ease;
+}
+
+.hud-color-orb-btn:active .hud-color-orb {
   transform: scale(1.2);
 }
 
 .custom-color-input {
   position: absolute;
-  opacity: 0;
-  width: 100%;
-  height: 100%;
-  cursor: pointer;
   top: 0;
   left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .sound-btn-card {

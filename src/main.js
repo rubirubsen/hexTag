@@ -1269,8 +1269,12 @@ if (btnNodeSendDrone) {
   });
 }
 
-// --- 13. VIBRANT COLOR PICKER & GPS RECENTER ---
-export function applyUserColor(color, name = '') {
+// --- 13. FREE CHOICE COLOR PICKER & GPS RECENTER ---
+const desktopColorPreview = document.getElementById('desktopColorPreview');
+const desktopColorHex = document.getElementById('desktopColorHex');
+const mobileColorOrb = document.getElementById('mobileColorOrb');
+
+export function applyUserColor(color, isSilent = false) {
   userColor = color;
   localStorage.setItem(SAVED_COLOR_KEY, userColor);
 
@@ -1289,32 +1293,33 @@ export function applyUserColor(color, name = '') {
 
   if (graffitiCanvas) graffitiCanvas.setBrushColor(userColor);
   updateHexGrid(userLocation.lat, userLocation.lng);
-  soundEngine.playClick();
-  showToast(`🎨 Farbe: ${name || userColor.toUpperCase()}`);
+  
+  if (!isSilent) {
+    soundEngine.playClick();
+    showToast(`🎨 Farbe gewählt: ${userColor.toUpperCase()}`);
+  }
 }
 
 function syncColorButtons() {
-  document.querySelectorAll('.color-btn').forEach(btn => {
-    if (btn.dataset.color && btn.dataset.color.toLowerCase() === userColor.toLowerCase()) {
-      btn.classList.add('active');
-    } else {
-      btn.classList.remove('active');
-    }
-  });
   document.querySelectorAll('.custom-color-input').forEach(input => {
     input.value = userColor;
   });
+  if (desktopColorPreview) {
+    desktopColorPreview.style.background = userColor;
+    desktopColorPreview.style.boxShadow = `0 0 16px ${userColor}`;
+  }
+  if (desktopColorHex) {
+    desktopColorHex.textContent = userColor.toUpperCase();
+  }
+  if (mobileColorOrb) {
+    mobileColorOrb.style.background = userColor;
+    mobileColorOrb.style.boxShadow = `0 0 14px ${userColor}`;
+  }
 }
-
-document.querySelectorAll('.color-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    applyUserColor(btn.dataset.color, btn.title);
-  });
-});
 
 document.querySelectorAll('.custom-color-input').forEach(input => {
   input.addEventListener('input', (e) => {
-    applyUserColor(e.target.value, 'Custom');
+    applyUserColor(e.target.value, false);
   });
 });
 
