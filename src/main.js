@@ -6,6 +6,7 @@ import { ARViewer } from './arViewer.js';
 import { DroneManager } from './droneManager.js';
 import { DataBitsManager } from './dataBitsManager.js';
 import { PoiManager } from './poiManager.js';
+import { soundEngine } from './soundEngine.js';
 
 // --- GAME CONFIGURATION ---
 const H3_RESOLUTION = 10;
@@ -18,6 +19,7 @@ const DRONE_DEPLOY_COST_XP = 30;
 const SAVED_COLOR_KEY = 'hextag_user_color';
 const SAVED_XP_KEY = 'hextag_user_xp';
 const SAVED_GUEST_NAME_KEY = 'hextag_guest_name';
+const LOCAL_ZONES_KEY = 'hextag_local_zones';
 
 let userColor = localStorage.getItem(SAVED_COLOR_KEY) || '#ff8000';
 document.documentElement.style.setProperty('--user-color', userColor);
@@ -40,6 +42,29 @@ let isTargetingDrone = false;
 // Hexagon Storage: hexId -> { owner: string, color: string, capturedAt: number }
 const capturedHexes = new Map();
 
+function loadLocalZones() {
+  try {
+    const saved = localStorage.getItem(LOCAL_ZONES_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      parsed.forEach(([hexId, data]) => {
+        capturedHexes.set(hexId, data);
+      });
+    }
+  } catch (e) {
+    console.warn('[hexTag] Error loading local zones:', e);
+  }
+}
+loadLocalZones();
+
+export function saveLocalZones() {
+  try {
+    localStorage.setItem(LOCAL_ZONES_KEY, JSON.stringify(Array.from(capturedHexes.entries())));
+  } catch (e) {
+    console.warn('[hexTag] Error saving local zones:', e);
+  }
+}
+
 // UI Elements
 const timerDisplay = document.getElementById('timerDisplay');
 const progressFillBar = document.getElementById('progressFillBar');
@@ -48,6 +73,9 @@ const captureStatusText = document.getElementById('captureStatusText');
 const hexTagCount = document.getElementById('hexTagCount');
 const totalXpDisplay = document.getElementById('totalXpDisplay');
 const dataBitsDisplay = document.getElementById('dataBitsDisplay');
+const btnToggleSound = document.getElementById('btnToggleSound');
+const soundIcon = document.getElementById('soundIcon');
+const floatingRewardsContainer = document.getElementById('floatingRewardsContainer');
 const gpsStatus = document.getElementById('gpsStatus');
 const toast = document.getElementById('toast');
 const userColorDot = document.getElementById('userColorDot');
@@ -115,6 +143,28 @@ totalXpDisplay.textContent = totalXp;
 userColorDot.style.background = userColor;
 userColorDot.style.boxShadow = `0 0 12px ${userColor}`;
 
+// Floating Reward FX
+export function spawnFloatingReward(text, color = '#ffe600') {
+  if (!floatingRewardsContainer) return;
+  const el = document.createElement('div');
+  el.className = 'floating-reward-item';
+  el.style.color = color;
+  el.style.left = `${window.innerWidth / 2 + (Math.random() - 0.5) * 80}px`;
+  el.style.top = `${window.innerHeight * 0.62}px`;
+  el.textContent = text;
+  floatingRewardsContainer.appendChild(el);
+  setTimeout(() => el.remove(), 1600);
+}
+
+if (btnToggleSound) {
+  if (soundIcon) soundIcon.textContent = soundEngine.isMuted ? '🔇' : '🔊';
+  btnToggleSound.addEventListener('click', () => {
+    const isMuted = soundEngine.toggleMute();
+    if (soundIcon) soundIcon.textContent = isMuted ? '🔇' : '🔊';
+    showToast(isMuted ? '🔇 Soundeffekte stummgeschaltet' : '🔊 Soundeffekte aktiviert');
+  });
+}
+
 // --- 1. AUTH & SSO PROFILE SYSTEM ---
 export function addXP(amount, reason = '') {
   totalXp = Math.max(0, totalXp + amount);
@@ -129,8 +179,9 @@ export function addXP(amount, reason = '') {
     syncProfileToServer({ xp: totalXp, level: calculatedLevel });
   }
 
-  if (amount > 0 && reason) {
-    showToast(`${reason} (+${amount} XP)`);
+  if (amount > 0) {
+    spawnFloatingReward(`+${amount} XP`, '#ffe600');
+    if (reason) showToast(`${reason} (+${amount} XP)`);
   } else if (amount < 0 && reason) {
     showToast(`${reason} (${amount} XP)`);
   }
@@ -448,6 +499,8 @@ map.on('load', () => {
       dataBitsDisplay.textContent = `💎 ${data.totalBits}`;
     }
     if (data.gained) {
+      soundEngine.playBitCollect();
+      spawnFloatingReward(`+${data.gained} 💎`, '#00f0ff');
       showToast(`✨ +${data.gained} ENERGY BITS GESAMMELT!`);
     }
   });
@@ -529,11 +582,12 @@ async function fetchServerZones() {
           capturedAt: z.captured_at
         });
       });
+      saveLocalZones();
       updateHexGrid(userLocation.lat, userLocation.lng);
       renderProfileTerritory();
     }
   } catch (e) {
-    console.log('[hexTag] Server-Zonen Offline:', e);
+    console.log('[hexTag] Server-Zonen Offline (verwende lokalen Speicher):', e);
   }
 }
 
@@ -682,8 +736,26 @@ function handlePositionChange(lat, lng) {
     currentHexId = newHex;
     currentHexLabel.textContent = `HEX: ${newHex.slice(-6).toUpperCase()}`;
     updateHudTagCount(newHex);
-    captureSeconds = 0;
-    showToast(`ZONE BETRETEN: ${newHex.slice(-6).toUpperCase()}`);
+
+    const currentName = currentUser?.username || localStorage.getItem(SAVED_GUEST_NAME_KEY) || 'TAGGER_01';
+    const existingZone = capturedHexes.get(newHex);
+    const isMine = existingZone && (
+      existingZone.color === userColor ||
+      (existingZone.owner && existingZone.owner.toLowerCase() === currentName.toLowerCase())
+    );
+
+    // If already owned by player, start immediately as held!
+    if (isMine) {
+      captureSeconds = CAPTURE_TIME_SECONDS;
+      timerDisplay.textContent = 'GEHALTEN';
+      timerDisplay.style.color = '#39ff14';
+      progressFillBar.style.width = '100%';
+      captureStatusText.textContent = 'Wabe in deinem Besitz (+10 XP/Min)';
+      showToast(`🛡️ DEIN REVIER: ${newHex.slice(-6).toUpperCase()}`);
+    } else {
+      captureSeconds = 0;
+      showToast(`ZONE BETRETEN: ${newHex.slice(-6).toUpperCase()}`);
+    }
   }
 
   updateHexGrid(lat, lng);
@@ -709,8 +781,13 @@ setInterval(() => {
   if (!currentHexId) return;
 
   const captured = capturedHexes.get(currentHexId);
+  const currentName = currentUser?.username || localStorage.getItem(SAVED_GUEST_NAME_KEY) || 'TAGGER_01';
+  const isMine = captured && (
+    captured.color === userColor ||
+    (captured.owner && captured.owner.toLowerCase() === currentName.toLowerCase())
+  );
 
-  if (captured && captured.color === userColor) {
+  if (isMine) {
     timerDisplay.textContent = 'GEHALTEN';
     timerDisplay.style.color = '#39ff14';
     progressFillBar.style.width = '100%';
@@ -741,13 +818,15 @@ setInterval(() => {
 }, 1000);
 
 async function completeCapture(hexId) {
-  const ownerName = currentUser ? currentUser.username : 'TAGGER_01';
+  const ownerName = currentUser ? currentUser.username : (localStorage.getItem(SAVED_GUEST_NAME_KEY) || 'TAGGER_01');
 
   capturedHexes.set(hexId, {
     owner: ownerName,
     color: userColor,
     capturedAt: Date.now()
   });
+  saveLocalZones();
+  soundEngine.playCaptureComplete();
 
   // Server-Sync
   try {
@@ -1001,60 +1080,6 @@ btnToggleAR.addEventListener('click', () => {
 
 btnCloseAR.addEventListener('click', () => arViewer.stop());
 
-// --- 11. COLOR PICKER & HELPERS ---
-function syncColorButtons() {
-  document.querySelectorAll('.color-btn').forEach(btn => {
-    if (btn.dataset.color === userColor) {
-      btn.classList.add('active');
-    } else {
-      btn.classList.remove('active');
-    }
-  });
-}
-
-document.querySelectorAll('.color-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    userColor = btn.dataset.color;
-    localStorage.setItem(SAVED_COLOR_KEY, userColor);
-
-    document.documentElement.style.setProperty('--user-color', userColor);
-    userColorDot.style.background = userColor;
-    userColorDot.style.boxShadow = `0 0 12px ${userColor}`;
-
-    syncColorButtons();
-
-    if (currentUser) {
-      currentUser.color = userColor;
-      syncProfileToServer({ color: userColor });
-    }
-
-    if (graffitiCanvas) graffitiCanvas.setBrushColor(userColor);
-    updateHexGrid(userLocation.lat, userLocation.lng);
-    showToast(`Farbe: ${btn.title}`);
-  });
-});
-
-document.getElementById('btnCenterMap').addEventListener('click', () => {
-  isFollowingUser = true;
-  const btn = document.getElementById('btnCenterMap');
-  if (btn) btn.classList.remove('needs-center');
-
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        applyGPSUpdate(pos, true);
-        showToast('🛰️ GPS ZENTRIERT & GEKOPPELT!');
-      },
-      (err) => {
-        map.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 17.5, pitch: 40, speed: 1.6 });
-      },
-      { enableHighAccuracy: true, timeout: 5000 }
-    );
-  } else {
-    map.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 17.5, pitch: 40, speed: 1.6 });
-  }
-});
-
 function showToast(msg) {
   toast.textContent = msg;
   toast.classList.add('show');
@@ -1133,6 +1158,18 @@ if (btnBuyBuilding) {
 
     const currentName = currentUser?.username || localStorage.getItem(SAVED_GUEST_NAME_KEY) || 'TAGGER_01';
     poiManager.buyBuilding(activeSelectedPoi, currentName, userColor);
+
+    // Also claim the building's hex zone for the player!
+    capturedHexes.set(activeSelectedPoi.hexId, {
+      owner: currentName,
+      color: userColor,
+      capturedAt: Date.now()
+    });
+    saveLocalZones();
+    updateHexGrid(userLocation.lat, userLocation.lng);
+    renderProfileTerritory();
+
+    soundEngine.playCaptureComplete();
     addXP(75, '🏢 GEBÄUDE ERFOLGREICH BESETZT!');
     openNodeControlModal(activeSelectedPoi);
     showToast(`🎉 ${activeSelectedPoi.name} GEKAUFT & VERTEIDIGT! (-${cost} 💎)`);
@@ -1141,6 +1178,7 @@ if (btnBuyBuilding) {
 
 if (btnCloseNodeModal) {
   btnCloseNodeModal.addEventListener('click', () => {
+    soundEngine.playClick();
     if (nodeModal) nodeModal.classList.remove('active');
   });
 }
@@ -1160,6 +1198,7 @@ if (btnUpgradeTurret) {
       color: userColor,
       owner: currentUser?.username || 'Tagger'
     });
+    soundEngine.playUpgrade();
     openNodeControlModal(activeSelectedPoi);
     showToast(`⚡ EMP-TURRET AUF LEVEL ${newLvl} VERSTÄRKT! (-50 💎)`);
   });
@@ -1178,6 +1217,7 @@ if (btnUpgradeShield) {
       color: userColor,
       owner: currentUser?.username || 'Tagger'
     });
+    soundEngine.playUpgrade();
     openNodeControlModal(activeSelectedPoi);
     showToast(`🛡️ PLASMA-SCHUTZSCHILD AKTIVIERT (100 HP)! (-40 💎)`);
   });
@@ -1196,6 +1236,7 @@ if (btnUpgradeBeacon) {
       color: userColor,
       owner: currentUser?.username || 'Tagger'
     });
+    soundEngine.playUpgrade();
     addXP(100, '📡 SIGNAL-BEACON AKTIVIERT');
     openNodeControlModal(activeSelectedPoi);
     showToast(`📡 SIGNAL-BEACON ONLINE! (+100 XP, -60 💎)`);
@@ -1205,6 +1246,7 @@ if (btnUpgradeBeacon) {
 if (btnNodeSpray) {
   btnNodeSpray.addEventListener('click', () => {
     if (!activeSelectedPoi) return;
+    soundEngine.playClick();
     if (nodeModal) nodeModal.classList.remove('active');
     sprayModalHexLabel.textContent = `GEBÄUDE: ${activeSelectedPoi.name.slice(0, 18).toUpperCase()}`;
     if (graffitiCanvas) graffitiCanvas.clear();
@@ -1215,6 +1257,7 @@ if (btnNodeSpray) {
 if (btnNodeSendDrone) {
   btnNodeSendDrone.addEventListener('click', () => {
     if (!activeSelectedPoi || !droneManager) return;
+    soundEngine.playClick();
     if (nodeModal) nodeModal.classList.remove('active');
     if (totalXp < DRONE_DEPLOY_COST_XP) {
       showToast(`⚠️ Nicht genug XP für Drohne (${DRONE_DEPLOY_COST_XP} XP benötigt)!`);
@@ -1225,3 +1268,74 @@ if (btnNodeSendDrone) {
     showToast(`🛸 Drohne auf dem Weg zu ${activeSelectedPoi.name}!`);
   });
 }
+
+// --- 13. VIBRANT COLOR PICKER & GPS RECENTER ---
+export function applyUserColor(color, name = '') {
+  userColor = color;
+  localStorage.setItem(SAVED_COLOR_KEY, userColor);
+
+  document.documentElement.style.setProperty('--user-color', userColor);
+  if (userColorDot) {
+    userColorDot.style.background = userColor;
+    userColorDot.style.boxShadow = `0 0 12px ${userColor}`;
+  }
+
+  syncColorButtons();
+
+  if (currentUser) {
+    currentUser.color = userColor;
+    syncProfileToServer({ color: userColor });
+  }
+
+  if (graffitiCanvas) graffitiCanvas.setBrushColor(userColor);
+  updateHexGrid(userLocation.lat, userLocation.lng);
+  soundEngine.playClick();
+  showToast(`🎨 Farbe: ${name || userColor.toUpperCase()}`);
+}
+
+function syncColorButtons() {
+  document.querySelectorAll('.color-btn').forEach(btn => {
+    if (btn.dataset.color && btn.dataset.color.toLowerCase() === userColor.toLowerCase()) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+  document.querySelectorAll('.custom-color-input').forEach(input => {
+    input.value = userColor;
+  });
+}
+
+document.querySelectorAll('.color-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    applyUserColor(btn.dataset.color, btn.title);
+  });
+});
+
+document.querySelectorAll('.custom-color-input').forEach(input => {
+  input.addEventListener('input', (e) => {
+    applyUserColor(e.target.value, 'Custom');
+  });
+});
+
+document.getElementById('btnCenterMap')?.addEventListener('click', () => {
+  isFollowingUser = true;
+  soundEngine.playClick();
+  const btn = document.getElementById('btnCenterMap');
+  if (btn) btn.classList.remove('needs-center');
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        applyGPSUpdate(pos, true);
+        showToast('🛰️ GPS ZENTRIERT & GEKOPPELT!');
+      },
+      () => {
+        map.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 17.5, pitch: 40, speed: 1.6 });
+      },
+      { enableHighAccuracy: true, timeout: 5000 }
+    );
+  } else {
+    map.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 17.5, pitch: 40, speed: 1.6 });
+  }
+});

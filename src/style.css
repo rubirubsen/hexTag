@@ -325,10 +325,17 @@ body, html {
 .color-picker-group {
   display: flex;
   gap: 6px;
-  background: rgba(0, 0, 0, 0.4);
-  padding: 5px 8px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.45);
+  padding: 6px 8px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+}
+
+.color-picker-group::-webkit-scrollbar {
+  display: none;
 }
 
 .color-btn {
@@ -338,13 +345,93 @@ body, html {
   background: var(--c);
   border: 2px solid transparent;
   cursor: pointer;
+  flex-shrink: 0;
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .color-btn.active {
-  transform: scale(1.22);
+  transform: scale(1.25);
   border-color: #ffffff;
   box-shadow: 0 0 14px var(--c);
+}
+
+.custom-color-picker-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff0055, #00f0ff, #ffe600);
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.custom-color-picker-btn:hover, .custom-color-picker-btn:active {
+  transform: scale(1.2);
+}
+
+.custom-color-input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+}
+
+.sound-btn-card {
+  cursor: pointer;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  font-size: 14px;
+  transition: transform 0.2s ease;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.sound-btn-card:active {
+  transform: scale(0.9);
+}
+
+/* Floating Rewards Animation */
+.floating-rewards-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 250;
+}
+
+.floating-reward-item {
+  position: absolute;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: #ffe600;
+  text-shadow: 0 0 12px rgba(255, 230, 0, 0.8), 0 0 20px rgba(0, 0, 0, 0.9);
+  animation: float-reward-up 1.6s cubic-bezier(0.215, 0.61, 0.355, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes float-reward-up {
+  0% { opacity: 0; transform: translate(-50%, 0) scale(0.6); }
+  15% { opacity: 1; transform: translate(-50%, -20px) scale(1.15); }
+  80% { opacity: 0.9; transform: translate(-50%, -70px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -100px) scale(0.9); }
 }
 
 /* Modals */
