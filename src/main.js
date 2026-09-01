@@ -1193,12 +1193,17 @@ function openNodeControlModal(poi, fort) {
     }
   }
 
+  if (btnNodeSendDrone) {
+    // Only show separate drone button for remote unowned nodes that don't have a drone yet
+    btnNodeSendDrone.style.display = (!isMine && !hasActiveDrone && !isPresentInHex) ? 'block' : 'none';
+  }
+
   if (btnNodeHackBits) {
     btnNodeHackBits.style.display = (poi.isDataDispenser && hasTacticalLink) ? 'block' : 'none';
   }
 
   if (nodeUpgradesSection) {
-    nodeUpgradesSection.style.display = (isMine && hasTacticalLink) ? 'flex' : 'none';
+    nodeUpgradesSection.style.display = isMine ? 'flex' : 'none';
   }
 
   if (nodeModal) nodeModal.classList.add('active');
