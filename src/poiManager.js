@@ -78,6 +78,27 @@ export class PoiManager {
   }
 
   /**
+   * Fetches/resolves POI data for the current user location and updates markers
+   */
+  async fetchNearbyPOIs(lat, lng) {
+    if (!lat || !lng) return;
+    if (this.lastFetchCoords) {
+      const dist = this.getDistanceMeters(lat, lng, this.lastFetchCoords.lat, this.lastFetchCoords.lng);
+      if (dist < 150) return; // Don't spam API if user hasn't moved much
+    }
+    this.lastFetchCoords = { lat, lng };
+
+    try {
+      const point = await this.resolvePoint(lat, lng);
+      if (point && this.fortifiedNodes[point.id]?.isOwned) {
+        this.addOrUpdateMarker(point, this.getFortification(point.id));
+      }
+    } catch (e) {
+      console.warn('[PoiManager] fetchNearbyPOIs fallback:', e.message);
+    }
+  }
+
+  /**
    * Resolves exact building / POI at any clicked map coordinate via OSM Reverse Geocoding
    */
   async resolvePoint(lat, lng) {
