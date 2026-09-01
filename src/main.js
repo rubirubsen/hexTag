@@ -20,6 +20,7 @@ const DRONE_DEPLOY_COST_XP = 30;
 const SAVED_COLOR_KEY = 'hextag_user_color';
 const SAVED_XP_KEY = 'hextag_user_xp';
 const SAVED_GUEST_NAME_KEY = 'hextag_guest_name';
+const SAVED_PROFILE_KEY = 'hextag_saved_user_profile';
 const LOCAL_ZONES_KEY = 'hextag_local_zones';
 
 let userColor = localStorage.getItem(SAVED_COLOR_KEY) || '#ff8000';
@@ -330,17 +331,45 @@ async function checkAuthStatus() {
     const data = await res.json();
     if (data.authenticated && data.user) {
       setLoggedInUser(data.user);
-    } else {
-      setLoggedOut();
+      return;
     }
   } catch (e) {
     console.log('[Auth] API im Offline/Standalone Modus:', e);
-    setLoggedOut();
   }
+
+  // Restore persistent local/guest user profile so player identity is never lost!
+  const savedProfile = localStorage.getItem(SAVED_PROFILE_KEY);
+  const savedGuestName = localStorage.getItem(SAVED_GUEST_NAME_KEY);
+  if (savedProfile) {
+    try {
+      const parsed = JSON.parse(savedProfile);
+      setLoggedInUser(parsed);
+      return;
+    } catch (err) {}
+  }
+
+  if (savedGuestName) {
+    setLoggedInUser({
+      id: `guest_${savedGuestName.toLowerCase()}`,
+      username: savedGuestName,
+      color: userColor,
+      xp: totalXp,
+      level: Math.floor(totalXp / 100) + 1,
+      sso_provider: 'guest'
+    });
+    return;
+  }
+
+  setLoggedOut();
 }
 
 function setLoggedInUser(user) {
   currentUser = user;
+  try {
+    localStorage.setItem(SAVED_PROFILE_KEY, JSON.stringify(user));
+    localStorage.setItem(SAVED_GUEST_NAME_KEY, user.username);
+  } catch (e) {}
+
   playerName.textContent = user.username.toUpperCase();
   userColor = user.color || userColor;
   localStorage.setItem(SAVED_COLOR_KEY, userColor);
@@ -374,6 +403,7 @@ function setLoggedInUser(user) {
 
 function setLoggedOut() {
   currentUser = null;
+  localStorage.removeItem(SAVED_PROFILE_KEY);
   const savedGuest = localStorage.getItem(SAVED_GUEST_NAME_KEY);
   playerName.textContent = savedGuest ? savedGuest.toUpperCase() : 'LOGIN ❯';
   loggedOutView.style.display = 'block';
@@ -453,6 +483,7 @@ btnLogout.addEventListener('click', async () => {
     await fetch('/api/auth/logout');
   } catch (e) {}
   localStorage.removeItem(SAVED_GUEST_NAME_KEY);
+  localStorage.removeItem(SAVED_PROFILE_KEY);
   setLoggedOut();
   renderProfileTerritory();
   updateHexGrid(userLocation.lat, userLocation.lng);
