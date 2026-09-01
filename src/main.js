@@ -102,6 +102,10 @@ const sprayModalHexLabel = document.getElementById('sprayModalHexLabel');
 const galleryModal = document.getElementById('galleryModal');
 const galleryHexLabel = document.getElementById('galleryHexLabel');
 const galleryGrid = document.getElementById('galleryGrid');
+const btnCloseGalleryModal = document.getElementById('btnCloseGalleryModal');
+const btnOpenHexGallery = document.getElementById('btnOpenHexGallery');
+const btnToggleAR = document.getElementById('btnToggleAR');
+const btnCloseAR = document.getElementById('btnCloseAR');
 
 // POI Node Modal Elements
 const nodeModal = document.getElementById('nodeModal');
@@ -1079,47 +1083,49 @@ btnSubmitSpray.addEventListener('click', async () => {
 });
 
 // --- 10. GALLERY & AR ---
-btnOpenHexGallery.addEventListener('click', () => {
+btnOpenHexGallery?.addEventListener('click', () => {
   if (!currentHexId) return;
   openGalleryForHex(currentHexId);
 });
 
-btnCloseGalleryModal.addEventListener('click', () => {
-  galleryModal.classList.remove('active');
+btnCloseGalleryModal?.addEventListener('click', () => {
+  if (galleryModal) galleryModal.classList.remove('active');
 });
 
 function openGalleryForHex(hexId) {
-  galleryHexLabel.textContent = `WABE: ${hexId.slice(-6).toUpperCase()}`;
+  if (galleryHexLabel) galleryHexLabel.textContent = `WABE: ${hexId.slice(-6).toUpperCase()}`;
   const tags = tagStore.getTagsForHex(hexId);
 
-  galleryGrid.innerHTML = '';
-  if (tags.length === 0) {
-    galleryGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-dim); padding: 30px 0;">Noch keine Tags vorhanden.</div>';
-  } else {
-    tags.forEach(t => {
-      const card = document.createElement('div');
-      card.className = 'gallery-card';
-      card.innerHTML = `
-        <img src="${t.imageBase64 || t.image_data}" alt="Tag" />
-        <div class="gallery-card-meta">
-          <span style="color: ${t.color}; font-weight: bold;">${t.author}</span>
-          <span>${new Date(t.timestamp || t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-        </div>
-      `;
-      galleryGrid.appendChild(card);
-    });
+  if (galleryGrid) {
+    galleryGrid.innerHTML = '';
+    if (tags.length === 0) {
+      galleryGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-dim); padding: 30px 0;">Noch keine Tags vorhanden.</div>';
+    } else {
+      tags.forEach(t => {
+        const card = document.createElement('div');
+        card.className = 'gallery-card';
+        card.innerHTML = `
+          <img src="${t.imageBase64 || t.image_data}" alt="Tag" />
+          <div class="gallery-card-meta">
+            <span style="color: ${t.color}; font-weight: bold;">${t.author}</span>
+            <span>${new Date(t.timestamp || t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+          </div>
+        `;
+        galleryGrid.appendChild(card);
+      });
+    }
   }
 
-  galleryModal.classList.add('active');
+  if (galleryModal) galleryModal.classList.add('active');
 }
 
-btnToggleAR.addEventListener('click', () => {
+btnToggleAR?.addEventListener('click', () => {
   if (!currentHexId) return;
   const currentTags = tagStore.getTagsForHex(currentHexId);
   arViewer.start(currentTags);
 });
 
-btnCloseAR.addEventListener('click', () => arViewer.stop());
+btnCloseAR?.addEventListener('click', () => arViewer.stop());
 
 function showToast(msg) {
   toast.textContent = msg;
