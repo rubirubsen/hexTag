@@ -66,6 +66,7 @@ export function saveLocalZones() {
 }
 
 // UI Elements
+const captureCard = document.getElementById('captureCard');
 const timerDisplay = document.getElementById('timerDisplay');
 const progressFillBar = document.getElementById('progressFillBar');
 const currentHexLabel = document.getElementById('currentHexLabel');
@@ -74,6 +75,8 @@ const hexTagCount = document.getElementById('hexTagCount');
 const totalXpDisplay = document.getElementById('totalXpDisplay');
 const dataBitsDisplay = document.getElementById('dataBitsDisplay');
 const btnToggleSound = document.getElementById('btnToggleSound');
+const btnToggleHud = document.getElementById('btnToggleHud');
+const btnRestoreHud = document.getElementById('btnRestoreHud');
 const soundIcon = document.getElementById('soundIcon');
 const floatingRewardsContainer = document.getElementById('floatingRewardsContainer');
 const gpsStatus = document.getElementById('gpsStatus');
@@ -727,8 +730,13 @@ function applyGPSUpdate(pos, isInstantJump = false) {
 
 map.on('dragstart', () => {
   isFollowingUser = false;
+  document.body.classList.add('map-dragging');
   const btn = document.getElementById('btnCenterMap');
   if (btn) btn.classList.add('needs-center');
+});
+
+map.on('dragend', () => {
+  document.body.classList.remove('map-dragging');
 });
 
 function handlePositionChange(lat, lng) {
@@ -749,13 +757,15 @@ function handlePositionChange(lat, lng) {
     // If already owned by player, start immediately as held!
     if (isMine) {
       captureSeconds = CAPTURE_TIME_SECONDS;
-      timerDisplay.textContent = 'GEHALTEN';
+      if (captureCard) captureCard.classList.add('is-held');
+      timerDisplay.textContent = '🛡️ GEHALTEN';
       timerDisplay.style.color = '#39ff14';
       progressFillBar.style.width = '100%';
       captureStatusText.textContent = 'Wabe in deinem Besitz (+10 XP/Min)';
       showToast(`🛡️ DEIN REVIER: ${newHex.slice(-6).toUpperCase()}`);
     } else {
       captureSeconds = 0;
+      if (captureCard) captureCard.classList.remove('is-held');
       showToast(`ZONE BETRETEN: ${newHex.slice(-6).toUpperCase()}`);
     }
   }
@@ -790,7 +800,8 @@ setInterval(() => {
   );
 
   if (isMine) {
-    timerDisplay.textContent = 'GEHALTEN';
+    if (captureCard) captureCard.classList.add('is-held');
+    timerDisplay.textContent = '🛡️ GEHALTEN';
     timerDisplay.style.color = '#39ff14';
     progressFillBar.style.width = '100%';
     captureStatusText.textContent = 'Wabe in deinem Besitz (+10 XP/Min)';
@@ -800,6 +811,7 @@ setInterval(() => {
       addXP(PASSIVE_XP_PER_MINUTE, '⏱️ WABE GEHALTEN');
     }
   } else {
+    if (captureCard) captureCard.classList.remove('is-held');
     captureSeconds++;
     const progress = Math.min(captureSeconds / CAPTURE_TIME_SECONDS, 1.0);
     const remaining = Math.max(0, CAPTURE_TIME_SECONDS - captureSeconds);
@@ -1346,3 +1358,31 @@ document.getElementById('btnCenterMap')?.addEventListener('click', () => {
     map.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 17.5, pitch: 40, speed: 1.6 });
   }
 });
+
+// --- 14. MINIMAL VIEW & HUD FOCUS MODE ---
+if (captureCard) {
+  captureCard.addEventListener('click', (e) => {
+    // Only toggle expansion if not clicking the tag gallery button
+    if (e.target.closest('#btnOpenHexGallery')) return;
+    captureCard.classList.toggle('expanded');
+    soundEngine.playClick();
+  });
+}
+
+if (btnToggleHud) {
+  btnToggleHud.addEventListener('click', () => {
+    document.body.classList.toggle('hud-hidden');
+    soundEngine.playClick();
+    if (document.body.classList.contains('hud-hidden')) {
+      showToast('👁️ Freie Sicht aktiviert (Tippe 👁️ HUD zum Wiederherstellen)');
+    }
+  });
+}
+
+if (btnRestoreHud) {
+  btnRestoreHud.addEventListener('click', () => {
+    document.body.classList.remove('hud-hidden');
+    soundEngine.playClick();
+    showToast('👁️ HUD wieder eingeblendet');
+  });
+}

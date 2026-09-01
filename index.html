@@ -159,11 +159,22 @@
       <input type="color" id="mobileColorInput" class="custom-color-input" value="#ff8000" />
     </label>
 
+    <!-- Clean Map / Focus View Toggle -->
+    <button class="hud-btn focus-btn" id="btnToggleHud" title="Freie Karten-Sicht (HUD ein-/ausblenden)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      <span>FOCUS</span>
+    </button>
+
     <button class="hud-btn test-btn" id="btnSimulateMove" title="Dev Move" style="display: none;">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
       <span>MOVE</span>
     </button>
   </nav>
+
+  <!-- Discrete Floating Button to Restore HUD when hidden -->
+  <button class="hud-restore-floating-btn" id="btnRestoreHud" title="HUD wieder einblenden">
+    <span>👁️ HUD</span>
+  </button>
 
   <!-- SSO & PROFILE LOGIN MODAL -->
   <div class="modal-backdrop" id="authModal">

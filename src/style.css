@@ -152,6 +152,31 @@ body, html {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Minimized / Held State: Ultralight compact pill for maximum map visibility */
+.capture-overlay.minimized,
+.capture-overlay.is-held {
+  padding: 6px 14px;
+  border-radius: 24px;
+  background: rgba(13, 18, 29, 0.75);
+  border-color: rgba(57, 255, 20, 0.3);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 0 12px rgba(57, 255, 20, 0.08);
+}
+
+.capture-overlay.minimized .progress-track,
+.capture-overlay.is-held:not(.expanded) .progress-track,
+.capture-overlay.minimized .capture-footer,
+.capture-overlay.is-held:not(.expanded) .capture-footer {
+  display: none;
+}
+
+.capture-overlay.is-held .capture-timer {
+  font-size: 12px;
+  color: #39ff14;
+  text-shadow: 0 0 8px rgba(57, 255, 20, 0.6);
 }
 
 .capture-header {
@@ -182,6 +207,7 @@ body, html {
   font-weight: 900;
   color: var(--accent-cyan);
   text-shadow: 0 0 12px rgba(0, 240, 255, 0.6);
+  transition: all 0.2s ease;
 }
 
 .progress-track {
@@ -228,6 +254,77 @@ body, html {
 .tag-counter-badge:hover {
   background: rgba(0, 240, 255, 0.25);
   transform: scale(1.05);
+}
+
+/* Clean Map / Immersion Focus Mode */
+body.hud-hidden .hud-header {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translateY(-40px);
+}
+
+body.hud-hidden .capture-overlay {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translateY(-40px);
+}
+
+body.hud-hidden .hud-bottom-bar {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translateY(70px);
+}
+
+body.hud-hidden .fab-spray-btn {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translateY(70px);
+}
+
+body.map-dragging .hud-header,
+body.map-dragging .capture-overlay {
+  opacity: 0.25;
+}
+
+.hud-header, .hud-bottom-bar, .fab-spray-btn, .capture-overlay {
+  transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Floating Restore Button */
+.hud-restore-floating-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 20px;
+  z-index: 100;
+  background: rgba(13, 18, 29, 0.92);
+  border: 1.5px solid #00f0ff;
+  color: #00f0ff;
+  padding: 10px 18px;
+  border-radius: 24px;
+  box-shadow: 0 0 25px rgba(0, 240, 255, 0.5);
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  backdrop-filter: blur(14px);
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.8);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+body.hud-hidden .hud-restore-floating-btn {
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1);
+}
+
+.hud-restore-floating-btn:hover,
+.hud-restore-floating-btn:active {
+  background: #00f0ff;
+  color: #000000;
+  box-shadow: 0 0 25px rgba(0, 240, 255, 0.9);
 }
 
 /* Floating Action Button: Spray Tag */
