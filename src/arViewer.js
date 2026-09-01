@@ -1,5 +1,6 @@
 /**
- * Lightweight WebAR & Camera Gyroscope Graffiti Viewer
+ * Directional Spatial WebAR ("Sie leben" Style Real-World AR Vision)
+ * Pins Graffiti Tags to exact 360° compass heading, tilt, and field-of-view in real space!
  */
 export class ARViewer {
   constructor(videoElement, containerElement, onBack) {
@@ -9,14 +10,18 @@ export class ARViewer {
     this.stream = null;
     this.isActive = false;
     this.tagsOverlay = containerElement.querySelector('.ar-tags-layer');
-    this.yaw = 0;
-    this.pitch = 0;
+    this.tags = [];
+
+    this.currentHeading = 0;
+    this.currentPitch = 0;
+    this.currentRoll = 0;
 
     this.handleOrientation = this.handleOrientation.bind(this);
   }
 
   async start(currentTags = []) {
     this.isActive = true;
+    this.tags = currentTags;
     this.container.classList.add('active');
 
     try {
@@ -29,59 +34,117 @@ export class ARViewer {
         await this.video.play();
       }
     } catch (e) {
-      console.warn('[ARViewer] Kamera konnte nicht gestartet werden (z.B. Desktop/fehlende Rechte):', e);
+      console.warn('[ARViewer] Kamera konnte nicht gestartet werden:', e);
       this.video.style.background = 'radial-gradient(circle, #1a2236 0%, #080c14 100%)';
     }
 
-    // Orientierungs-Sensoren (Handy-Bewegung)
-    if (window.DeviceOrientationEvent) {
+    // Device orientation permissions (iOS 13+) & orientation listening
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      try {
+        const response = await DeviceOrientationEvent.requestPermission();
+        if (response === 'granted') {
+          window.addEventListener('deviceorientation', this.handleOrientation);
+        }
+      } catch (err) {
+        window.addEventListener('deviceorientation', this.handleOrientation);
+      }
+    } else if (window.DeviceOrientationEvent) {
       window.addEventListener('deviceorientation', this.handleOrientation);
     }
 
-    this.renderTags(currentTags);
+    this.renderSpatialTags();
   }
 
   handleOrientation(e) {
     if (!this.isActive) return;
-    const alpha = e.alpha || 0; // Kompass (0 - 360)
-    const beta = e.beta || 0;   // Neigung (Front/Back)
-    const gamma = e.gamma || 0; // Neigung (Left/Right)
 
-    if (this.tagsOverlay) {
-      // Parallax-Verschiebung der Graffitis passend zur Handy-Bewegung
-      const moveX = (gamma * 4);
-      const moveY = ((beta - 45) * 4);
-      this.tagsOverlay.style.transform = `translate(${moveX}px, ${moveY}px)`;
+    // Compass Heading (Alpha: 0 - 360)
+    let heading = 0;
+    if (e.webkitCompassHeading !== undefined) {
+      heading = e.webkitCompassHeading;
+    } else if (e.alpha !== null) {
+      heading = (360 - e.alpha) % 360;
     }
+
+    const pitch = e.beta !== null ? e.beta : 45; // Front/Back tilt
+    const roll = e.gamma !== null ? e.gamma : 0;  // Left/Right tilt
+
+    this.currentHeading = heading;
+    this.currentPitch = pitch;
+    this.currentRoll = roll;
+
+    this.updateSpatialPositions();
   }
 
-  renderTags(tags) {
+  updateSpatialPositions() {
+    if (!this.tagsOverlay || this.tags.length === 0) return;
+
+    const screenWidth = window.innerWidth || 360;
+    const screenHeight = window.innerHeight || 640;
+    const hFov = 65; // Horizontal field of view in degrees (~65° for smartphone cameras)
+    const vFov = 45; // Vertical field of view in degrees
+
+    const items = this.tagsOverlay.querySelectorAll('.ar-spatial-tag');
+
+    items.forEach((el, idx) => {
+      const tag = this.tags[idx];
+      if (!tag) return;
+
+      // Target Anchor: Stored heading & pitch when the author snapped/sprayed the wall
+      const targetHeading = tag.heading !== undefined ? tag.heading : 180;
+      const targetPitch = tag.pitch !== undefined ? tag.pitch : 45;
+
+      // Calculate smallest angular difference in 360° circle
+      let deltaHeading = (targetHeading - this.currentHeading + 540) % 360 - 180;
+      let deltaPitch = (targetPitch - this.currentPitch);
+
+      // Check if tag is in front of camera FOV (e.g. ±35° horizon)
+      const isInFov = Math.abs(deltaHeading) <= (hFov / 2) && Math.abs(deltaPitch) <= (vFov / 2);
+
+      if (isInFov) {
+        // Map degrees to screen pixels
+        const screenX = (screenWidth / 2) + (deltaHeading / (hFov / 2)) * (screenWidth / 2);
+        const screenY = (screenHeight / 2) - (deltaPitch / (vFov / 2)) * (screenHeight / 2);
+
+        el.style.opacity = '1';
+        el.style.visibility = 'visible';
+        el.style.transform = `translate(${screenX - 100}px, ${screenY - 100}px) scale(1)`;
+      } else {
+        // Looking at wrong wall / other direction -> Hide!
+        el.style.opacity = '0';
+        el.style.visibility = 'hidden';
+      }
+    });
+  }
+
+  renderSpatialTags() {
     if (!this.tagsOverlay) return;
     this.tagsOverlay.innerHTML = '';
 
-    if (tags.length === 0) {
+    if (this.tags.length === 0) {
       const emptyNotice = document.createElement('div');
       emptyNotice.className = 'ar-empty-badge';
-      emptyNotice.innerHTML = '<span>NOCH KEINE GRAFFITIS HIER</span><small>Sei der Erste und spraye einen Tag!</small>';
+      emptyNotice.innerHTML = '<span>SCANNE DIE UMGEBUNG</span><small>Blicke mit der Kamera auf die Wände im Umkreis!</small>';
       this.tagsOverlay.appendChild(emptyNotice);
       return;
     }
 
-    // Platziere die Tags versetzt im virtuellen Raum
-    tags.forEach((tag, idx) => {
-      const tagCard = document.createElement('div');
-      tagCard.className = 'ar-graffiti-item';
-      
-      const offsetX = (idx % 3 - 1) * 110;
-      const offsetY = Math.floor(idx / 3) * 120 - 40;
-      tagCard.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
-
-      tagCard.innerHTML = `
-        <div class="tag-meta">${tag.author} • ${new Date(tag.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-        <img src="${tag.imageBase64}" alt="Graffiti Tag" class="tag-img" />
+    this.tags.forEach(tag => {
+      const item = document.createElement('div');
+      item.className = 'ar-spatial-tag';
+      item.innerHTML = `
+        <div class="ar-tag-hologram">
+          <div class="ar-tag-header">
+            <span class="ar-author" style="color: ${tag.color || '#00f0ff'}">${tag.author || 'ANON'}</span>
+            <span class="ar-anchor-badge">📍 360° ANCHOR</span>
+          </div>
+          <img src="${tag.imageBase64 || tag.image_data}" alt="AR Graffiti" class="ar-graffiti-img" />
+        </div>
       `;
-      this.tagsOverlay.appendChild(tagCard);
+      this.tagsOverlay.appendChild(item);
     });
+
+    this.updateSpatialPositions();
   }
 
   stop() {

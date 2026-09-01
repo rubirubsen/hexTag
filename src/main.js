@@ -1132,34 +1132,45 @@ brushSizeSlider.addEventListener('input', (e) => {
 btnUndoCanvas.addEventListener('click', () => graffitiCanvas && graffitiCanvas.undo());
 btnClearCanvas.addEventListener('click', () => graffitiCanvas && graffitiCanvas.clear());
 
+let currentDeviceHeading = 180;
+let currentDevicePitch = 45;
+
+if (window.DeviceOrientationEvent) {
+  window.addEventListener('deviceorientation', (e) => {
+    if (e.webkitCompassHeading !== undefined) {
+      currentDeviceHeading = e.webkitCompassHeading;
+    } else if (e.alpha !== null) {
+      currentDeviceHeading = (360 - e.alpha) % 360;
+    }
+    if (e.beta !== null) currentDevicePitch = e.beta;
+  }, { passive: true });
+}
+
 btnSubmitSpray.addEventListener('click', async () => {
   if (!graffitiCanvas || !currentHexId) return;
 
   const imageBase64 = graffitiCanvas.exportDataURL();
   const authorName = currentUser?.username || localStorage.getItem(SAVED_GUEST_NAME_KEY) || 'TAGGER_01';
 
-  tagStore.addTag({
+  const tagData = {
     hexId: currentHexId,
     lat: userLocation.lat,
     lng: userLocation.lng,
-    author: authorName,
+    heading: Math.round(currentDeviceHeading),
+    pitch: Math.round(currentDevicePitch),
     color: userColor,
-    imageBase64
-  });
+    imageBase64,
+    author: authorName
+  };
+
+  tagStore.addTag(tagData);
 
   // Server Tag Sync
   try {
     const res = await fetch('/api/tags', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        hexId: currentHexId,
-        lat: userLocation.lat,
-        lng: userLocation.lng,
-        color: userColor,
-        imageBase64,
-        author: authorName
-      })
+      body: JSON.stringify(tagData)
     });
     if (res.ok) {
       const data = await res.json();
@@ -1172,7 +1183,7 @@ btnSubmitSpray.addEventListener('click', async () => {
   }
 
   stopSprayArCamera();
-  addXP(SPRAY_XP_REWARD, '🎨 TAG GESPRÜHT!');
+  addXP(SPRAY_XP_REWARD, '🎨 TAG GESPRÜHT! (360° AR VERANKERT)');
   sprayModal.classList.remove('active');
   updateHudTagCount(currentHexId);
   updateHexGrid(userLocation.lat, userLocation.lng);
