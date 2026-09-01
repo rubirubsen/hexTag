@@ -1659,3 +1659,90 @@ body, html {
   box-shadow: 0 0 15px rgba(0, 240, 255, 0.6);
   transform: scale(1.04);
 }
+
+/* HQ Base Cyber Fortress Marker */
+.hq-base-marker {
+  position: relative;
+  cursor: pointer;
+  z-index: 12;
+  transform: translate(-50%, -50%);
+}
+
+.hq-core {
+  background: rgba(13, 18, 29, 0.95);
+  border: 2px solid var(--hq-color, #ffe600);
+  box-shadow: 0 0 25px var(--hq-color, #ffe600), inset 0 0 15px rgba(255, 230, 0, 0.4);
+  padding: 6px 12px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  backdrop-filter: blur(8px);
+}
+
+.hq-core .hq-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.hq-label {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: 1px;
+  text-shadow: 0 0 8px var(--hq-color, #ffe600);
+}
+
+.hq-beacon-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 70px;
+  height: 70px;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--hq-color, #ffe600);
+  border-radius: 50%;
+  animation: hq-pulse 2.2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+  pointer-events: none;
+}
+
+@keyframes hq-pulse {
+  0% { transform: translate(-50%, -50%) scale(0.4); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(2.8); opacity: 0; }
+}
+
+/* Drone Marker */
+.drone-marker-x {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  z-index: 15;
+  transform: translate(-50%, -50%);
+}
+
+.drone-x-symbol {
+  font-size: 22px;
+  filter: drop-shadow(0 0 10px var(--drone-color, #00f0ff));
+  animation: drone-hover 1.8s ease-in-out infinite alternate;
+}
+
+.drone-tag {
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid var(--drone-color, #00f0ff);
+  color: #ffffff;
+  font-family: var(--font-display);
+  font-size: 8px;
+  font-weight: 900;
+  padding: 1px 4px;
+  border-radius: 4px;
+  margin-top: 2px;
+}
+
+@keyframes drone-hover {
+  0% { transform: translateY(0) rotate(-5deg); }
+  100% { transform: translateY(-8px) rotate(5deg); }
+}

@@ -538,18 +538,20 @@ map.on('load', () => {
     }
   });
 
-  checkAuthStatus();
-  fetchServerZones();
-  updateHexGrid(userLocation.lat, userLocation.lng);
-  startGeolocation();
-  syncColorButtons();
-
+  // Initialize Data Bits layers on top of hex grid
   if (dataBitsManager) {
+    dataBitsManager.initSourceAndLayers();
     dataBitsManager.spawnNearbyBits(userLocation.lat, userLocation.lng);
   }
   if (poiManager) {
     poiManager.fetchNearbyPOIs(userLocation.lat, userLocation.lng);
   }
+
+  checkAuthStatus();
+  fetchServerZones();
+  updateHexGrid(userLocation.lat, userLocation.lng);
+  startGeolocation();
+  syncColorButtons();
 
   // Handle responsive resizing (e.g. Chrome DevTools Device Mode toggle)
   window.addEventListener('resize', () => {
@@ -881,7 +883,7 @@ function handleDroneManagerUpdate(data) {
     }
   }
 
-  activeDroneCount.textContent = `${data.activeDrones.length} AKTIV`;
+  activeDroneCount.textContent = `${data.activeDrones || 0} AKTIV`;
 }
 
 btnBuildHQ.addEventListener('click', () => {

@@ -1,10 +1,11 @@
 /**
- * DataBitsManager (Ingress-style XM & Cyber Energy Collection)
+ * DataBitsManager (Ingress-style XM & Cyber Energy Collection with flying vacuum physics)
  */
 import * as h3 from 'h3-js';
 
 const DATA_BITS_STORAGE_KEY = 'hextag_data_bits';
-const PICKUP_RADIUS_METERS = 38; // Distance in meters to vacuum bits
+const PICKUP_RADIUS_METERS = 28; // Distance to absorb
+const VACUUM_MAGNET_RADIUS = 75; // Distance where orbs start flying toward player
 
 export class DataBitsManager {
   constructor(map, onBitsUpdate) {
@@ -13,7 +14,6 @@ export class DataBitsManager {
     this.bits = [];
     this.totalBits = this.loadBitsCount();
     this.maxBitsCapacity = 1000;
-    this.lastSpawnTime = 0;
     this.currentCenterHex = null;
 
     this.initSourceAndLayers();
@@ -45,7 +45,7 @@ export class DataBitsManager {
         data: { type: 'FeatureCollection', features: [] }
       });
 
-      // Outer Glow Pulse
+      // Outer Pulsing Neon Glow
       this.map.addLayer({
         id: 'data-bits-glow',
         type: 'circle',
@@ -53,12 +53,12 @@ export class DataBitsManager {
         paint: {
           'circle-radius': ['get', 'glowRadius'],
           'circle-color': ['get', 'color'],
-          'circle-opacity': 0.25,
-          'circle-blur': 0.8
+          'circle-opacity': 0.65,
+          'circle-blur': 0.5
         }
       });
 
-      // Inner Core
+      // Inner Diamond Core
       this.map.addLayer({
         id: 'data-bits-core',
         type: 'circle',
@@ -66,8 +66,8 @@ export class DataBitsManager {
         paint: {
           'circle-radius': ['get', 'coreRadius'],
           'circle-color': '#ffffff',
-          'circle-opacity': 0.95,
-          'circle-stroke-width': 1.5,
+          'circle-opacity': 1.0,
+          'circle-stroke-width': 2.5,
           'circle-stroke-color': ['get', 'color']
         }
       });
@@ -79,7 +79,7 @@ export class DataBitsManager {
    */
   spawnNearbyBits(lat, lng) {
     const centerHex = h3.latLngToCell(lat, lng, 10);
-    if (this.currentCenterHex === centerHex && this.bits.length > 12) {
+    if (this.currentCenterHex === centerHex && this.bits.length >= 20) {
       return;
     }
     this.currentCenterHex = centerHex;
@@ -89,19 +89,18 @@ export class DataBitsManager {
     const colors = ['#00f0ff', '#ff8000', '#39ff14', '#ffe600', '#ff0055'];
 
     nearbyHexes.forEach((hex, hexIdx) => {
-      // 2 - 4 bits per hex
-      const count = (hexIdx % 3) + 2;
+      // 3 - 5 bits per hex
+      const count = (hexIdx % 3) + 3;
       const boundary = h3.cellToBoundary(hex);
 
       for (let i = 0; i < count; i++) {
-        // Random point inside hex approximation
         const rndVertex = boundary[i % boundary.length];
-        const offsetLat = (Math.random() - 0.5) * 0.0006;
-        const offsetLng = (Math.random() - 0.5) * 0.0008;
+        const offsetLat = (Math.random() - 0.5) * 0.0005;
+        const offsetLng = (Math.random() - 0.5) * 0.0007;
 
         const bLat = rndVertex[0] + offsetLat;
         const bLng = rndVertex[1] + offsetLng;
-        const value = Math.floor(Math.random() * 5) + 3; // 3 to 7 bits per shard
+        const value = Math.floor(Math.random() * 5) + 5; // 5 to 10 bits per shard
         const color = colors[(hexIdx + i) % colors.length];
 
         newBits.push({
@@ -117,20 +116,20 @@ export class DataBitsManager {
       }
     });
 
-    // Keep existing uncollected bits + new bits (cap at 60)
     const existing = this.bits.filter(b => !b.isCollected);
-    this.bits = [...existing, ...newBits].slice(0, 60);
+    this.bits = [...existing, ...newBits].slice(0, 70);
     this.updateGeoJSON();
   }
 
   /**
-   * Called every frame / GPS update to check magnet vacuum pickup
+   * Called every frame / GPS update to check magnet vacuum pickup & floating physics
    */
   update(userLat, userLng) {
     if (!userLat || !userLng || this.bits.length === 0) return;
 
     let collectedCount = 0;
     let totalGained = 0;
+    let needsRedraw = false;
 
     for (let i = this.bits.length - 1; i >= 0; i--) {
       const bit = this.bits[i];
@@ -138,19 +137,25 @@ export class DataBitsManager {
 
       const dist = this.getDistanceMeters(userLat, userLng, bit.lat, bit.lng);
 
-      // Vacuum range
+      // Vacuum Absorption
       if (dist <= PICKUP_RADIUS_METERS) {
         bit.isCollected = true;
         collectedCount++;
         totalGained += bit.value;
         this.bits.splice(i, 1);
+        needsRedraw = true;
+      }
+      // Magnet Pull: Float towards player!
+      else if (dist <= VACUUM_MAGNET_RADIUS) {
+        bit.lat += (userLat - bit.lat) * 0.22;
+        bit.lng += (userLng - bit.lng) * 0.22;
+        needsRedraw = true;
       }
     }
 
     if (collectedCount > 0) {
       this.totalBits = Math.min(this.maxBitsCapacity, this.totalBits + totalGained);
       this.saveBitsCount();
-      this.updateGeoJSON();
 
       if (this.onBitsUpdate) {
         this.onBitsUpdate({
@@ -159,6 +164,10 @@ export class DataBitsManager {
           collectedCount
         });
       }
+    }
+
+    if (needsRedraw || collectedCount > 0) {
+      this.updateGeoJSON();
     }
   }
 
@@ -182,17 +191,17 @@ export class DataBitsManager {
     const source = this.map.getSource('data-bits-source');
     if (!source) return;
 
-    const time = Date.now() / 600;
+    const time = Date.now() / 400;
     const features = this.bits.map(b => {
-      const pulse = Math.sin(time + b.animOffset) * 2;
+      const pulse = Math.sin(time + b.animOffset) * 3;
       return {
         type: 'Feature',
         properties: {
           id: b.id,
           color: b.color,
           value: b.value,
-          glowRadius: 10 + pulse,
-          coreRadius: 4 + pulse * 0.3
+          glowRadius: 14 + pulse,
+          coreRadius: 6 + pulse * 0.35
         },
         geometry: {
           type: 'Point',
@@ -205,7 +214,7 @@ export class DataBitsManager {
   }
 
   getDistanceMeters(lat1, lon1, lat2, lon2) {
-    const R = 6371e3; // metres
+    const R = 6371e3;
     const φ1 = (lat1 * Math.PI) / 180;
     const φ2 = (lat2 * Math.PI) / 180;
     const Δφ = ((lat2 - lat1) * Math.PI) / 180;

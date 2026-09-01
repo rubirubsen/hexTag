@@ -1,8 +1,10 @@
 /**
  * hexTag Drone & HQ (Stützpunkt) System
  */
+import * as h3 from 'h3-js';
+import maplibregl from 'maplibre-gl';
+
 const HQ_STORAGE_KEY = 'hextag_player_hq';
-const DRONES_STORAGE_KEY = 'hextag_active_drones';
 
 export class DroneManager {
   constructor(map, onDroneUpdate) {
@@ -32,6 +34,12 @@ export class DroneManager {
     this.hq = hqData;
     localStorage.setItem(HQ_STORAGE_KEY, JSON.stringify(hqData));
     this.initHQMarker();
+    if (this.onDroneUpdate) {
+      this.onDroneUpdate({
+        hq: this.hq,
+        activeDrones: this.drones.length
+      });
+    }
   }
 
   initHQMarker() {
@@ -44,9 +52,10 @@ export class DroneManager {
     const el = document.createElement('div');
     el.className = 'hq-base-marker';
     el.innerHTML = `
-      <div class="hq-core" style="--hq-color: ${this.hq.color}">
+      <div class="hq-beacon-ring"></div>
+      <div class="hq-core" style="--hq-color: ${this.hq.color || '#ffe600'}">
         <span class="hq-icon">🏢</span>
-        <div class="hq-label">HQ: ${this.hq.name || 'STÜTZPUNKT'}</div>
+        <div class="hq-label">HQ • ${(this.hq.name || 'STÜTZPUNKT').slice(0, 16).toUpperCase()}</div>
       </div>
     `;
 
@@ -55,7 +64,31 @@ export class DroneManager {
       .addTo(this.map);
   }
 
-  deployDrone({ targetHexId, targetLat, targetLng, color, author = 'CMD_01' }) {
+  deployDrone(target, colorOverride = '#00f0ff') {
+    let targetHexId = '';
+    let targetLat = 0;
+    let targetLng = 0;
+    let color = colorOverride;
+    let author = 'CMD_01';
+
+    if (typeof target === 'string') {
+      targetHexId = target;
+      try {
+        const [hLat, hLng] = h3.cellToLatLng(targetHexId);
+        targetLat = hLat;
+        targetLng = hLng;
+      } catch (e) {
+        targetLat = this.hq ? this.hq.lat : 52.52;
+        targetLng = this.hq ? this.hq.lng : 13.40;
+      }
+    } else if (typeof target === 'object') {
+      targetHexId = target.targetHexId;
+      targetLat = target.targetLat;
+      targetLng = target.targetLng;
+      color = target.color || color;
+      author = target.author || author;
+    }
+
     const droneId = 'drone_' + Date.now().toString(36);
     const startLat = this.hq ? this.hq.lat : targetLat;
     const startLng = this.hq ? this.hq.lng : targetLng;
@@ -78,6 +111,13 @@ export class DroneManager {
     this.drones.push(drone);
     this.createDroneMarker(drone);
 
+    if (this.onDroneUpdate) {
+      this.onDroneUpdate({
+        hq: this.hq,
+        activeDrones: this.drones.length
+      });
+    }
+
     return drone;
   }
 
@@ -86,7 +126,7 @@ export class DroneManager {
     el.className = 'drone-marker-x';
     el.style.setProperty('--drone-color', drone.color);
     el.innerHTML = `
-      <div class="drone-x-symbol">✖</div>
+      <div class="drone-x-symbol">🛸</div>
       <div class="drone-tag">${drone.targetHexId.slice(-4).toUpperCase()}</div>
     `;
 
@@ -98,33 +138,21 @@ export class DroneManager {
   }
 
   update(deltaSeconds = 1) {
-    // HQ 2-Minuten Timer Update
-    if (!this.hq) {
-      this.hqTimerSeconds += deltaSeconds;
-      if (this.hqTimerSeconds >= this.hqTimerRequired) {
-        this.isHqEligible = true;
-      }
-    }
-
-    // Dronen Flug & Mission Loop
     for (let i = this.drones.length - 1; i >= 0; i--) {
       const drone = this.drones[i];
       drone.durationRemaining -= deltaSeconds;
 
-      // Flug-Interpolation zur Zielwabe (10 Sekunden Flugzeit)
-      const flightDuration = 10;
-      const timeElapsed = drone.durationTotal - drone.durationRemaining;
-      const flightProgress = Math.min(timeElapsed / flightDuration, 1.0);
+      const elapsed = drone.durationTotal - drone.durationRemaining;
+      drone.progress = Math.min(1, elapsed / 10); // 10s Flugzeit
 
-      drone.currentLat = drone.currentLat + (drone.targetLat - drone.currentLat) * (flightProgress * 0.2);
-      drone.currentLng = drone.currentLng + (drone.targetLng - drone.currentLng) * (flightProgress * 0.2);
+      drone.currentLat = drone.currentLat + (drone.targetLat - drone.currentLat) * 0.15;
+      drone.currentLng = drone.currentLng + (drone.targetLng - drone.currentLng) * 0.15;
 
       const marker = this.droneMarkers.get(drone.id);
       if (marker) {
         marker.setLngLat([drone.currentLng, drone.currentLat]);
       }
 
-      // Drone abgelaufen -> Aufloesen
       if (drone.durationRemaining <= 0) {
         if (marker) marker.remove();
         this.droneMarkers.delete(drone.id);
@@ -138,7 +166,7 @@ export class DroneManager {
         hqTimerSeconds: this.hqTimerSeconds,
         hqTimerRequired: this.hqTimerRequired,
         isHqEligible: this.isHqEligible,
-        activeDrones: this.drones
+        activeDrones: this.drones.length
       });
     }
   }
