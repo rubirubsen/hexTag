@@ -64,7 +64,7 @@ body, html {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  z-index: 10;
+  z-index: 60;
   pointer-events: none;
 }
 
@@ -170,17 +170,17 @@ body, html {
   top: calc(100% + 8px);
   right: 0;
   width: 210px;
-  background: rgba(13, 18, 29, 0.96);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border: 1px solid rgba(0, 240, 255, 0.3);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 240, 255, 0.15);
+  background: rgba(13, 18, 29, 0.98);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.9), 0 0 25px rgba(0, 240, 255, 0.25);
   border-radius: 14px;
   padding: 8px;
   display: none;
   flex-direction: column;
   gap: 4px;
-  z-index: 50;
+  z-index: 150;
   animation: fadeIn 0.2s ease-out;
 }
 
@@ -297,7 +297,7 @@ body, html {
   top: 80px;
   left: 16px;
   right: 16px;
-  z-index: 10;
+  z-index: 20;
   background: var(--panel-bg);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -312,12 +312,18 @@ body, html {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Minimized / Held State: Ultralight compact pill for maximum map visibility */
+/* Minimized / Held State: Ultralight compact centered pill */
 .capture-overlay.minimized,
-.capture-overlay.is-held {
+.capture-overlay.is-held:not(.expanded) {
+  top: 76px;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: auto;
+  max-width: 270px;
   padding: 6px 14px;
   border-radius: 24px;
-  background: rgba(13, 18, 29, 0.75);
+  background: rgba(13, 18, 29, 0.85);
   border-color: rgba(57, 255, 20, 0.3);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 0 12px rgba(57, 255, 20, 0.08);
 }
